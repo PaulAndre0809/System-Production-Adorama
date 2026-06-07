@@ -1,127 +1,136 @@
 # Email & SMS Campaign Tracker
 
-Target workbook: `Email & SMS Campaign Tracker.xlsm`  
-Target table: `ProductionInventoryTable` on `Production Inventory`
+## Files
 
-## Why the existing module must be replaced
+- `Email & SMS Campaign Tracker.xlsm`: working Excel application.
+- `Email & SMS Campaign Tracker.bas`: canonical VBA source embedded in the XLSM.
+- `Email & SMS Campaign Tracker.ps1`: transactional Windows deployment.
+- `Email & SMS Campaign Tracker.py`: independent QA and maintenance utility.
+- `Email & SMS Campaign Tracker.md`: operating and technical guide.
 
-The original VBA uses fixed column letters such as `A`, `F`, `V`, and `W`.
-It also calculates stage and risk from columns that this migration removes.
-Deleting columns without replacing that code would cause macros to write into
-the wrong fields and would leave broken Dashboard references.
+## Campaign sheets
 
-The replacement module keeps the existing public procedure names, but resolves
-columns by table header. It also rebuilds the compact 14-day Dashboard view.
+`Email Campaigns` contains the existing email workflow. Its eight checkbox
+columns remain in G:N:
 
-## Safe implementation
+1. Campaign Name and UTM Parameter (Source Code)
+2. Creative Brief, SL & PH
+3. SKUs
+4. In-Design
+5. Build, QA
+6. Route
+7. Approval
+8. Segments
 
-1. Close any other copies of the workbook and make sure it is saved as `.xlsm`.
-2. Open the workbook and press `Alt+F11`.
-3. In the Project Explorer, right-click `modEmailProductionTracker`, choose
-   **Export File**, and retain that export as an additional code backup.
-4. Right-click `modEmailProductionTracker` again and choose **Remove**. Choose
-   **No** when Excel asks whether to export it again.
-5. Choose **File > Import File** in the VBA editor and import
-   `Email & SMS Campaign Tracker.bas`. The module name must be
-   `modEmailProductionTracker`.
-6. Choose **Debug > Compile VBAProject**. Resolve any compile error before
-   continuing. A duplicate procedure error means the old module was not removed.
-7. Return to Excel, press `Alt+F8`, select
-   `MigrateProductionInventoryStructure`, and click **Run**.
-8. The macro creates a timestamped `*_PRE_MIGRATION_*.xlsm` backup before making
-   changes. Review the final table, Dashboard, formulas, and any UserForms.
-9. Save the reviewed workbook as `.xlsm`.
+`SMS Campaigns` uses the same campaign metadata, links, delivery, and audit
+fields, but has only four checkbox columns in G:J:
 
-## Resulting Production Inventory order
+1. Send SMS Options
+2. Send Test
+3. Approval
+4. Segments
 
-The eight checklist columns are inserted immediately after `Owner`:
+Owner fields are plain text. Modern Microsoft 365 builds use native in-cell
+checkboxes with TRUE/FALSE values. The VBA source uses late-bound checkbox
+access so older desktop builds do not fail to compile; those builds receive a
+visual Boolean fallback that can be toggled by double-clicking.
 
-1. `Send Date`
-2. `Send Time`
-3. `Campaign Name`
-4. `Campaign Type`
-5. `Current Stage`
-6. `Owner`
-7. `Campaign Name and UTM Parameter (Source Code)`
-8. `Creative Brief, SL & PH`
-9. `SKUs`
-10. `In-Design`
-11. `Build, QA`
-12. `Route`
-13. `Approval`
-14. `Segments`
-15. `Jira Link`
-16. `ClickUp Link`
-17. `Bluecore Link`
-18. `Est. Audience`
-19. `Delivered`
-20. `Last Updated`
-21. `Last Updated By`
+## Current Stage
 
-Each checklist column receives a data-validation dropdown containing unchecked
-and checked symbols. Single-clicking a checklist cell toggles it. `Owner`
-is plain text, `Send Date` uses `MM/DD/YYYY`, and `Last Updated By` records the
-Windows or Excel user name.
+Current Stage is a calculated table column on both campaign sheets. The
+workbook is saved in automatic calculation mode, and desktop edit events also
+calculate the changed row explicitly.
 
-## Current Stage workflow
+Email progresses through Source Code, Creative Brief, Waiting for SKUs, With
+Design, Build / QA, Routing, Awaiting Approval, Segments, Links Pending, Ready
+to Schedule, Scheduled, and Sent.
 
-After the existing production checklist stages are complete, `Current Stage`
-progresses through the scheduling stages in this order:
+SMS progresses through SMS Options, Send Test, Awaiting Approval, Segments,
+Links Pending, Ready to Schedule, Scheduled, and Sent.
 
-1. `Segments` while the Segments checklist field is unchecked.
-2. `Links Pending` while Jira Link, ClickUp Link, or Bluecore Link is blank.
-3. `Ready to Schedule` when Segments is checked and all three links are filled.
-4. `Scheduled` when Est. Audience is also filled.
-5. `Sent` when Delivered contains a number greater than zero.
+Delivered values greater than zero set the stage to Sent.
 
-Whitespace-only link and audience values are treated as blank.
+## Dashboard and calendars
 
-## UserForm compatibility check
+The Dashboard combines Email and SMS campaigns scheduled from Monday of the
+current week through Sunday of the following week. A Channel column identifies
+the source sheet.
 
-The provided module preserves known public macro names. If a separate UserForm
-directly uses expressions such as `Cells(row, "V")` or `Range("H:H")`, update it
-to call `InventoryColumnNumber("Header Name")`. Direct hard-coded references in
-code outside the exported module cannot be repaired automatically without
-reviewing that code.
+`DeliveredComparisonTable` compares total delivered emails for:
 
-If the migration reports new `#REF!` references, do not save the changed
-workbook. Close it and restore the timestamped pre-migration backup.
+- Last week, Monday through Sunday.
+- Current week, Monday through Sunday.
+- The current-week difference from last week.
 
-## Monthly calendars
+All twelve calendar sheets combine both tables and prefix entries with
+`Email |` or `SMS |`. The current-month tab is green and all other month tabs
+use the default blue.
 
-The consolidated module includes the `RebuildMonthlyCalendars` maintenance macro. It creates January through
-December calendar sheets for the current year. Calendar cells read `Send Date`
-and `Campaign Name` directly from `ProductionInventoryTable`, so changes to the
-inventory appear automatically.
+## SharePoint and Excel compatibility
 
-The calendar rebuild also:
+The XLSM can be stored, opened, edited, and coauthored through SharePoint.
+Microsoft documents native in-cell checkboxes for Microsoft 365, Mac, and Excel
+for the web:
 
-- Adds January-December navigation links to the Dashboard.
-- Hides the required `Dropdowns` and `Automation Log` support sheets.
-- Removes the obsolete `README` and `VBA Code` worksheets.
-- Applies freeze panes, print areas, gridline settings, and consistent styling.
+<https://support.microsoft.com/en-gb/office/using-check-boxes-in-excel-da85546d-c110-49b8-b633-9cebadcaf8d4>
 
-## Automated deployment
+Formula-driven stages, calendars, and delivered totals recalculate in supported
+Excel for the web sessions. Microsoft does not allow VBA macros to run in Excel
+for the web:
 
-Close Excel, then run:
+<https://support.microsoft.com/en-us/office/work-with-vba-macros-in-excel-for-the-web-98784ad0-898c-43aa-a1da-4f0fb5014343>
+
+Consequently, desktop Excel is required for VBA-only conveniences: updater
+name/timestamp stamping, the compact Dashboard detail snapshot, daily digest,
+and automated deployment. Browser edits remain in the workbook and those
+desktop-only views refresh the next time the file opens in desktop Excel.
+
+Avoid simultaneous browser and desktop edits while running deployment.
+
+## Deployment
+
+Close all Excel windows, then run:
 
 ```powershell
-.\embed_vba.ps1
+powershell -ExecutionPolicy Bypass -File ".\Email & SMS Campaign Tracker.ps1"
 ```
 
-The script temporarily enables trusted VBA project access, replaces the
-standard module and workbook event handlers, applies all configurations, runs
-the workbook validation function, saves only after validation succeeds, and
-restores the prior Excel security setting.
+The deployer:
 
-After the VBA is embedded, `apply_changes.py` can reapply and validate workbook
-formatting without modifying the VBA project.
+1. Works on a temporary copy.
+2. Keeps calculation manual during VBA replacement.
+3. Compiles the VBA project.
+4. Applies and validates both campaign models.
+5. Calculates each worksheet once.
+6. Saves the workbook in automatic calculation mode.
+7. Replaces the XLSM only after QA succeeds.
+8. Restores the previous XLSM if post-deployment QA fails.
 
-Run the disposable-copy behavior test with:
+## QA and maintenance
+
+Run the disposable-copy QA suite:
 
 ```powershell
-..\.venv\Scripts\python.exe .\qa_workbook.py
+..\.venv\Scripts\python.exe ".\Email & SMS Campaign Tracker.py" --qa
 ```
 
-The smoke test verifies audit timestamps, user attribution, checklist toggling,
-stage calculation, Dashboard refresh, and the workbook validation function.
+Reapply the embedded configuration transactionally:
+
+```powershell
+..\.venv\Scripts\python.exe ".\Email & SMS Campaign Tracker.py" --apply
+```
+
+The suite validates both table schemas, checkbox behavior, dynamic Email and SMS
+stage transitions, audit fields, calendar aggregation, Dashboard aggregation,
+weekly delivered totals, automatic calculation persistence, save/reopen
+persistence, embedded VBA, links, and broken references.
+
+## Performance changes
+
+- Removed persisted manual calculation, which caused stale Current Stage values.
+- Removed broad `Application.CalculateFull` calls from calendar rebuilds.
+- Uses targeted row and worksheet calculation.
+- Keeps a compact 14-day Dashboard snapshot.
+- Uses one transactional deployer instead of competing repair scripts.
+- Applies native checkbox formatting by range instead of creating hundreds of
+  shape controls.
