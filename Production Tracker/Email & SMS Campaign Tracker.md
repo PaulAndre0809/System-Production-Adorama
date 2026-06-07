@@ -1,6 +1,6 @@
-# Production Inventory Migration
+# Email & SMS Campaign Tracker
 
-Target workbook: `Email_Production_Inventory_Tracker_UI.xlsm`  
+Target workbook: `Email & SMS Campaign Tracker.xlsm`  
 Target table: `ProductionInventoryTable` on `Production Inventory`
 
 ## Why the existing module must be replaced
@@ -11,7 +11,7 @@ Deleting columns without replacing that code would cause macros to write into
 the wrong fields and would leave broken Dashboard references.
 
 The replacement module keeps the existing public procedure names, but resolves
-columns by table header. It also rebuilds the affected Dashboard formulas.
+columns by table header. It also rebuilds the compact 14-day Dashboard view.
 
 ## Safe implementation
 
@@ -22,7 +22,8 @@ columns by table header. It also rebuilds the affected Dashboard formulas.
 4. Right-click `modEmailProductionTracker` again and choose **Remove**. Choose
    **No** when Excel asks whether to export it again.
 5. Choose **File > Import File** in the VBA editor and import
-   `Email_Production_Inventory_Tracker_UI.bas`.
+   `Email & SMS Campaign Tracker.bas`. The module name must be
+   `modEmailProductionTracker`.
 6. Choose **Debug > Compile VBAProject**. Resolve any compile error before
    continuing. A duplicate procedure error means the old module was not removed.
 7. Return to Excel, press `Alt+F8`, select
@@ -55,9 +56,12 @@ The eight checklist columns are inserted immediately after `Owner`:
 18. `Est. Audience`
 19. `Delivered`
 20. `Last Updated`
+21. `Last Updated By`
 
 Each checklist column receives a data-validation dropdown containing unchecked
-and checked symbols. `Send Date` receives the `MM/DD/YYYY` number format.
+and checked symbols. Single-clicking a checklist cell toggles it. `Owner`
+is plain text, `Send Date` uses `MM/DD/YYYY`, and `Last Updated By` records the
+Windows or Excel user name.
 
 ## Current Stage workflow
 
@@ -85,8 +89,7 @@ workbook. Close it and restore the timestamped pre-migration backup.
 
 ## Monthly calendars
 
-The consolidated `Email_Production_Inventory_Tracker_UI.bas` module includes
-the `RebuildMonthlyCalendars` maintenance macro. It creates January through
+The consolidated module includes the `RebuildMonthlyCalendars` maintenance macro. It creates January through
 December calendar sheets for the current year. Calendar cells read `Send Date`
 and `Campaign Name` directly from `ProductionInventoryTable`, so changes to the
 inventory appear automatically.
@@ -97,3 +100,28 @@ The calendar rebuild also:
 - Hides the required `Dropdowns` and `Automation Log` support sheets.
 - Removes the obsolete `README` and `VBA Code` worksheets.
 - Applies freeze panes, print areas, gridline settings, and consistent styling.
+
+## Automated deployment
+
+Close Excel, then run:
+
+```powershell
+.\embed_vba.ps1
+```
+
+The script temporarily enables trusted VBA project access, replaces the
+standard module and workbook event handlers, applies all configurations, runs
+the workbook validation function, saves only after validation succeeds, and
+restores the prior Excel security setting.
+
+After the VBA is embedded, `apply_changes.py` can reapply and validate workbook
+formatting without modifying the VBA project.
+
+Run the disposable-copy behavior test with:
+
+```powershell
+..\.venv\Scripts\python.exe .\qa_workbook.py
+```
+
+The smoke test verifies audit timestamps, user attribution, checklist toggling,
+stage calculation, Dashboard refresh, and the workbook validation function.

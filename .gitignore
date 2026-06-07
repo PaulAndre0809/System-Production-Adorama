@@ -1,0 +1,8 @@
+.venv/
+.kilo/
+__pycache__/
+*.pyc
+~$*.xlsm
+*_PRE_MIGRATION_*.xlsm
+*_PRE_AUTOMATION_*.xlsm
+Production Tracker/apply_log.txt
