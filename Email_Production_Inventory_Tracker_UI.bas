@@ -236,8 +236,14 @@ Public Function CalculateCurrentStage( _
         CalculateCurrentStage = "Awaiting Approval"
     ElseIf Not IsChecked(ValueByHeader(ws, r, "Segments")) Then
         CalculateCurrentStage = "Segments"
-    Else
+    ElseIf Not HasText(ValueByHeader(ws, r, "Jira Link")) Or _
+        Not HasText(ValueByHeader(ws, r, "ClickUp Link")) Or _
+        Not HasText(ValueByHeader(ws, r, "Bluecore Link")) Then
+        CalculateCurrentStage = "Links Pending"
+    ElseIf Not HasText(ValueByHeader(ws, r, "Est. Audience")) Then
         CalculateCurrentStage = "Ready to Schedule"
+    Else
+        CalculateCurrentStage = "Scheduled"
     End If
 End Function
 
@@ -687,8 +693,14 @@ Private Sub ApplyCalculatedColumns(ByVal lo As ListObject)
     formulaText = formulaText & _
         "IF([@Approval]<>""" & checkedMark & """,""Awaiting Approval"","
     formulaText = formulaText & _
-        "IF([@Segments]<>""" & checkedMark & """,""Segments""," & _
-        """Ready to Schedule""" & String$(10, ")")
+        "IF([@Segments]<>""" & checkedMark & """,""Segments"","
+    formulaText = formulaText & _
+        "IF(OR(IFERROR(LEN(TRIM([@[Jira Link]]&"""")),0)=0," & _
+        "IFERROR(LEN(TRIM([@[ClickUp Link]]&"""")),0)=0," & _
+        "IFERROR(LEN(TRIM([@[Bluecore Link]]&"""")),0)=0),""Links Pending"","
+    formulaText = formulaText & _
+        "IF(IFERROR(LEN(TRIM([@[Est. Audience]]&"""")),0)=0," & _
+        """Ready to Schedule"",""Scheduled""" & String$(12, ")")
 
     If Not stageColumn.DataBodyRange Is Nothing Then
         stageColumn.DataBodyRange.Formula = formulaText
@@ -813,6 +825,12 @@ Private Function IsChecked(ByVal value As Variant) As Boolean
         (textValue = "done") Or _
         (textValue = "complete") Or _
         (textValue = "completed")
+End Function
+
+Private Function HasText(ByVal value As Variant) As Boolean
+    If IsError(value) Or IsNull(value) Or IsEmpty(value) Then Exit Function
+
+    HasText = (Len(Trim$(CStr(value))) > 0)
 End Function
 
 Private Function CheckedSymbol() As String

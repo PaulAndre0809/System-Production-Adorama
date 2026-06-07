@@ -59,6 +59,19 @@ The eight checklist columns are inserted immediately after `Owner`:
 Each checklist column receives a data-validation dropdown containing unchecked
 and checked symbols. `Send Date` receives the `MM/DD/YYYY` number format.
 
+## Current Stage workflow
+
+After the existing production checklist stages are complete, `Current Stage`
+progresses through the scheduling stages in this order:
+
+1. `Segments` while the Segments checklist field is unchecked.
+2. `Links Pending` while Jira Link, ClickUp Link, or Bluecore Link is blank.
+3. `Ready to Schedule` when Segments is checked and all three links are filled.
+4. `Scheduled` when Est. Audience is also filled.
+5. `Sent` when Delivered contains a number greater than zero.
+
+Whitespace-only link and audience values are treated as blank.
+
 ## UserForm compatibility check
 
 The provided module preserves known public macro names. If a separate UserForm
