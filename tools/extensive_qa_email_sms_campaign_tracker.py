@@ -309,15 +309,45 @@ def assert_checklist_columns(table, checklist_headers: list[str], checks: list[s
 def assert_stage_values(table, seeded_rows: list[dict], channel: str, checks: list[str]) -> None:
     for row_info in seeded_rows:
         value = str(get_table_value(row_info["row"], table, "Current Stage") or "")
+        approval = get_table_value(row_info["row"], table, "Approval")
+        segments = get_table_value(row_info["row"], table, "Segments")
+        est_audience = get_table_value(row_info["row"], table, "Est. Audience")
+        
+        # Check if all checkboxes are True for this channel
+        all_checked = False
+        if channel == "Email":
+            all_checked = (
+                get_table_value(row_info["row"], table, "Campaign Name and UTM Parameter (Source Code)") and
+                get_table_value(row_info["row"], table, "Creative Brief, SL & PH") and
+                get_table_value(row_info["row"], table, "SKUs") and
+                get_table_value(row_info["row"], table, "In-Design") and
+                get_table_value(row_info["row"], table, "Build, QA") and
+                get_table_value(row_info["row"], table, "Route") and
+                approval and segments
+            )
+        else:
+            all_checked = (
+                get_table_value(row_info["row"], table, "Send SMS Options") and
+                get_table_value(row_info["row"], table, "Send Test") and
+                approval and segments
+            )
+
+        has_audience = est_audience is not None and str(est_audience).strip() != "" and float(est_audience) > 0
+        
         if not value:
             raise AssertionError(f"Current Stage is blank for {row_info['name']}")
-        if row_info["name"].endswith("01") and "Checked:" not in value:
-            raise AssertionError(f"Current Stage did not list checked items for {row_info['name']}: {value}")
-        if channel == "Email" and row_info["name"].endswith("01") and "Campaign Name and UTM Parameter" not in value:
-            raise AssertionError(f"Email Current Stage missing checked source-code step: {value}")
-        if channel == "SMS" and row_info["name"].endswith("01") and "Send SMS Options" not in value:
-            raise AssertionError(f"SMS Current Stage missing checked SMS step: {value}")
-    checks.append(f"{channel} Current Stage formulas update from checked columns")
+            
+        if all_checked and has_audience:
+            if value != "Completed":
+                raise AssertionError(f"Current Stage should be 'Completed' for fully checked row {row_info['name']}, got: {value}")
+        else:
+            if row_info["name"].endswith("01") and "Checked:" not in value:
+                raise AssertionError(f"Current Stage did not list checked items for {row_info['name']}: {value}")
+            if channel == "Email" and row_info["name"].endswith("01") and "Campaign Name and UTM Parameter" not in value:
+                raise AssertionError(f"Email Current Stage missing checked source-code step: {value}")
+            if channel == "SMS" and row_info["name"].endswith("01") and "Send SMS Options" not in value:
+                raise AssertionError(f"SMS Current Stage missing checked SMS step: {value}")
+    checks.append(f"{channel} Current Stage formulas update from checked columns and show 'Completed'")
 
 
 def assert_dashboard_rows(dashboard_table, email_seed, sms_seed, checks: list[str]) -> None:
@@ -342,14 +372,14 @@ def assert_dashboard_rows(dashboard_table, email_seed, sms_seed, checks: list[st
 
 
 def assert_calendar_rows(workbook, email_seed, sms_seed, today: dt.date, checks: list[str]) -> None:
-    current_sheet = workbook.Worksheets(today.strftime("%B") + " Calendar")
+    current_sheet = workbook.Worksheets("2026 " + today.strftime("%B") + " Calendar")
     current_text = sheet_text(current_sheet)
     for row_info in email_seed["dashboard_expected"][:2] + sms_seed["dashboard_expected"][:2]:
         if row_info["date"].month == today.month and row_info["name"] not in current_text:
             raise AssertionError(f"Current month calendar missing {row_info['name']}")
 
     previous_month = first_of_previous_month(today)
-    previous_sheet = workbook.Worksheets(previous_month.strftime("%B") + " Calendar")
+    previous_sheet = workbook.Worksheets("2026 " + previous_month.strftime("%B") + " Calendar")
     previous_text = sheet_text(previous_sheet)
     previous_names = [
         row["name"]

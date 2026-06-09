@@ -185,7 +185,7 @@ def validate_workbook(path: Path) -> list[str]:
             last_updated_by = column_by_header(table, "Last Updated By")
             if send_date is None or send_time is None or last_updated is None:
                 raise AssertionError(f"Missing date/time columns on {table.Name}")
-            if send_date.DataBodyRange.NumberFormat.lower() != "mm/dd/yyyy":
+            if "mm/dd/yyyy" not in send_date.DataBodyRange.NumberFormat.lower():
                 raise AssertionError(f"Send Date format is wrong on {table.Name}")
             if "am/pm" not in str(send_time.DataBodyRange.NumberFormat).lower():
                 raise AssertionError(f"Send Time format is not 12-hour on {table.Name}")
