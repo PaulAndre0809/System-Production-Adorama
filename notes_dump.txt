@@ -1,0 +1,72 @@
+R1C1: Detailed Notes and Instructions
+R3C1: Component
+R3C2: Function
+R3C3: Displayed Information
+R3C4: Limitations
+R3C5: Usage
+R4C1: Email Campaigns Sheet
+R4C2: Source table for all email-related tasks and tracking.
+R4C3: Send Date, Send Time, Campaign Name, Campaign Type, Owner, Checklist items, Links (Jira, ClickUp, Bluecore/Attentive), Est. Audience, Delivered, Notes, Current Stage.
+R4C4: Checkbox columns must not be converted to dropdowns. Headers must not be renamed. Do not delete table rows/columns outside normal table editing.
+R4C5: Enter all email campaign details here. Check the boxes as tasks are completed.
+R5C1: SMS Campaigns Sheet
+R5C2: Source table for all SMS-related tasks and tracking.
+R5C3: Send Date, Send Time, Campaign Name, Campaign Type, Owner, SMS Checklist, Proof of Schedule, Bluecore/Attentive Link, Est. Audience, Delivered, Notes, Current Stage.
+R5C4: Headers must not be renamed. Formula and audit columns should not be manually typed over. Do not remove the Campaign Type dropdown.
+R5C5: Enter all SMS campaign details here. Check the boxes as tasks are completed.
+R6C1: Dashboard Sheet
+R6C2: Summarizes the current week through next week Email and SMS campaigns.
+R6C3: Upcoming campaigns, approval status (Done/Not Yet), Segments status (Provided/Pending), and Delivered comparison.
+R6C4: Dashboard is formula-driven for web compatibility; formulas, charts, and generated table values should not be edited directly.
+R6C5: View-only summary. Keep source campaign rows complete and dated so they appear correctly on the Dashboard.
+R7C1: Calendar Sheets (Jan-Dec)
+R7C2: Monthly visual layout of Email and SMS campaigns by Send Date.
+R7C3: Campaigns listed on their scheduled Send Date. A 'Week No.' column automatically computes and displays the week number (e.g., 'Week 24'). Current month tab turns green automatically.
+R7C4: Monthly sheets should not be deleted. Calendar formulas should not be overwritten.
+R7C5: Automatically updates based on Send Dates in the campaign sheets. Do not edit directly.
+R8C1: Current Stage Column
+R8C2: Automatically concatenates and lists checked checklist items.
+R8C3: Shows 'Done: [Item1], [Item2]' or 'No checklist items checked'.
+R8C4: Driven by formulas. Cannot be manually overwritten.
+R8C5: Do not edit directly. Update the corresponding checkboxes to change the Current Stage.
+R9C1: Dropdowns
+R9C2: Source list for Campaign Type dropdowns on the campaign sheets.
+R9C3: Promo, Services, Loyalty & PLCC, Newsletters, Events, NPA, Others.
+R9C4: Custom values should not be added to the source list directly.
+R9C5: If a type does not fit, choose 'Others' in the campaign sheet and then manually type the custom value over it in the cell.
+R10C1: SharePoint / Collaboration
+R10C2: Allows collaboration via SharePoint/Excel for the web.
+R10C3: N/A
+R10C4: Excel for the web does not run VBA macros, so macro-only automation requires desktop Excel.
+R10C5: For macro refreshes and audit stamping, open in desktop Excel with macros enabled.
+R11C1: Required Stability Rules
+R11C2: Ensures automation finds columns correctly by header/table name.
+R11C3: N/A
+R11C4: Avoid merged cells inside tables, external workbook links, protected sheets that block macros, and changing table names.
+R11C5: Use real dates in Send Date, numbers in Delivered and Est. Audience, URLs in link fields, and plain text in Owner/Notes.
+R12C1: Web Compatibility
+R12C2: Ensures the workbook functions in web browsers without VBA.
+R12C3: Last Refresh, Last Edited timestamps.
+R12C4: Do not add freeze panes, external scripts, workbook links, or Python automation.
+R12C5: Use normal table edits. Dashboard Last Refresh and Last Edited are NOW-based recalculation timestamps. Row-level Last Updated By is manual in the web version.
+R13C1: Send Date Formatting
+R13C2: Automatically enforces formatting for consistency across Email, SMS, and Dashboard sheets.
+R13C3: Dates displayed as Day of Week, MM/DD/YYYY (e.g., Monday, 06/01/2026).
+R13C4: N/A
+R13C5: Enter any valid date, and it will automatically snap to the required format.
+R14C1: Cancellation Detection
+R14C2: Automatically detects cancelled campaigns by checking the Notes column in Email Campaigns and SMS Campaigns sheets.
+R14C3: If Notes contains only 'Cancelled' or 'Canceled' (case-insensitive, no extra text), the Dashboard displays 'CANCELLED - [Campaign Name]' in the Campaign column, sets Stage to 'Cancelled', and marks Approval and Segments as 'N/A'.
+R14C4: Only exact single-word matches trigger cancellation. Notes like 'Cancelled due to rain' or 'Not Cancelled' will NOT trigger it.
+R14C5: Type 'Cancelled' or 'Canceled' in the Notes column of any campaign row. The Dashboard will automatically reflect the cancellation status.
+R15C1: Scheduled Column
+R15C2: Checkbox column on both Email and SMS Campaigns sheets.
+R15C3: When Segments is checked but Scheduled is not, Current Stage shows 'Ready to Schedule'.
+R15C4: Must remain as a checkbox (TRUE/FALSE).
+R15C5: Check the box once the campaign is scheduled.
+R17C2: Link Auto-Formatting (Jira, ClickUp, Bluecore, Proof of Schedule)
+R18C2: To make links easier to double-check during the build and QA process, the tracker automatically manages how links are displayed.
+
+1. When you paste a link for an upcoming or recent campaign, it remains as a raw URL so you can easily read it and verify the destination.
+2. Once a campaign has been sent (Delivered column has a value) AND it has been 7 days since the Send Date, the tracker cleans up the history.
+3. The raw URLs will be automatically converted into clickable, clean buttons (e.g., 'Jira', 'ClickUp') to keep the tracker looking tidy.
