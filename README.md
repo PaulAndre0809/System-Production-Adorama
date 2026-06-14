@@ -1,114 +1,135 @@
-<div align="center">
+# System Production Adorama
 
-# 📊 System Production Adorama
+This repository contains the self-contained **Email & SMS Campaign Tracker**
+Excel application.
 
-[![Excel](https://img.shields.io/badge/Microsoft_Excel-217346?style=for-the-badge&logo=microsoft-excel&logoColor=white)](Production%20Tracker/)
-[![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)](#)
-[![Tracker](https://img.shields.io/badge/Version-v2.0-blue?style=for-the-badge)](#)
+## Workbooks
 
-*Production tracking tools and systems, primarily focusing on email and SMS campaign management and reporting analysis.*
+The `Production Tracker` directory contains:
 
-</div>
+- `Email & SMS Campaign Tracker.xlsm`: active tracker
+- `Email & SMS Campaign Tracker Template.xlsm`: clean template
+- `Email & SMS Campaign Tracker_backup.xlsm`: backup copy
 
----
+All formulas, formatting, validation, and VBA required at runtime are embedded
+in each `.xlsm` file. Scripts in `tools/` are development and QA utilities only.
 
-## 🚀 Components
+## Worksheet Structure
 
-### 📧 Email & SMS Campaign Tracker
+| Sheet | Purpose |
+| --- | --- |
+| `Dashboard` | Current Sunday through next Saturday campaign view and summary KPIs |
+| `Email Campaigns` | Email campaign source table and eight workflow checkboxes |
+| `SMS Campaigns` | SMS campaign source table and four workflow checkboxes |
+| `Notes - Instructions` | Protected user and maintenance guide |
+| `Dropdowns` | Hidden Campaign Type validation source |
+| `Automation Log` | Hidden desktop automation and error log |
 
-Located in the [`Production Tracker`](Production%20Tracker/) directory, this tool is an advanced Excel-based application (`.xlsm`) designed for tracking the workflow, stages, and schedules of Email and SMS marketing campaigns.
+Monthly Calendar sheets and Last Week versus Current Week delivery comparisons
+have been retired.
 
-<details open>
-<summary><b>📂 Worksheet Structure & Navigation</b></summary>
-<br>
+## Campaign Fields
 
-The workbook is fully self-contained and structured logically across the following worksheets:
+Both campaign tables contain:
 
-| Sheet Name | Description |
-| :--- | :--- |
-| 📝 **`Notes - Instruction`** | Comprehensive user and technical guide detailing the schema rules, stability requirements, and instructions for SharePoint collaboration. |
-| 🎛️ **`Dashboard`** | Combined command center displaying active work, open campaigns, campaigns scheduled for the current and next week, and a delivered comparison table. |
-| 📧 **`Email Campaigns`** | Source table tracking the email workflow, utilizing checkbox progression to drive campaign status. |
-| 📱 **`SMS Campaigns`** | Source table tracking the SMS workflow, mirroring the email metadata schema but with a streamlined checklist. |
-| 📅 **`Monthly Calendars`** | Dynamic calendars (January to December) aggregating both email and SMS campaigns sorted by `Send Date`. The current month tab is dynamically highlighted in green. |
-| 🔽 **`Dropdowns`** | Storage for valid metadata values (e.g., Campaign Types, Owner list). |
-| 📜 **`Automation Log`** | Running ledger of system updates and audit logs. |
+- `Send Date`
+- `Send Time`
+- `Campaign Name`
+- `Campaign Type`
+- `Current Stage`
+- `Owner`
+- channel-specific workflow checkboxes
+- links
+- `Est. Audience`
+- `Delivered`
+- `Last Updated`
+- `Last Updated By`
+- `Notes`
 
-</details>
+Email workflow fields are:
 
-<br>
+1. `Campaign Name and UTM Parameter (Source Code)`
+2. `Creative Brief, SL & PH`
+3. `SKUs`
+4. `In-Design`
+5. `Build, QA`
+6. `Route`
+7. `Approval`
+8. `Segments`
 
-<details>
-<summary><b>📊 Data Schemas & Table Headers</b></summary>
-<br>
+SMS workflow fields are:
 
-#### 📧 Email Campaigns Table
-Tracks the full email deployment pipeline with **8 checkbox columns** (G:N):
+1. `Send SMS Options`
+2. `Send Test`
+3. `Approval`
+4. `Segments`
 
-*   **Core Metadata**: `Send Date`, `Send Time`, `Campaign Name`, `Campaign Type`, `Current Stage`, `Owner`
-*   **Workflow Checkboxes**:
-    1. `Campaign Name and UTM Parameter (Source Code)`
-    2. `Creative Brief, SL & PH`
-    3. `SKUs`
-    4. `In-Design`
-    5. `Build, QA`
-    6. `Route`
-    7. `Approval`
-    8. `Segments`
-*   **Links & Audit**: `Jira Link`, `ClickUp Link`, `Bluecore/Attentive Link`, `Est. Audience`, `Delivered`, `Last Updated`, `Last Updated By`, `Notes`
+`Current Stage` lists all checked workflow fields rather than selecting only one
+stage.
 
-#### 📱 SMS Campaigns Table
-Streamlines the SMS pipeline with **4 checkbox columns** (G:J):
+## Date And Time Input
 
-*   **Core Metadata**: `Send Date`, `Send Time`, `Campaign Name`, `Campaign Type`, `Current Stage`, `Owner`
-*   **Workflow Checkboxes**:
-    1. `Send SMS Options`
-    2. `Send Test`
-    3. `Approval`
-    4. `Segments`
-*   **Links & Audit**: `Jira Link`, `ClickUp Link`, `Bluecore/Attentive Link`, `Est. Audience`, `Delivered`, `Last Updated`, `Last Updated By`, `Notes`
+- `Send Date` displays as `dddd, mmmm d, yyyy`, for example
+  `Wednesday, June 10, 2026`.
+- Numeric `Send Time` values display in 12-hour format.
+- `Send Time` also accepts text such as `STO` and `Local Timezone`.
 
-</details>
+## Dashboard
 
-<br>
+The Dashboard combines Email and SMS campaigns scheduled from the current
+Sunday through the following Saturday.
 
-<details>
-<summary><b>⚙️ State Machine & Stage Calculation</b></summary>
-<br>
+Approval displays `Done` or `Not Yet`. Segments displays `Provided` or
+`Pending`. A campaign is excluded from both the Dashboard feed and summary
+KPIs when either `Current Stage` or `Notes` is exactly `Cancelled` or
+`Canceled`, ignoring capitalization and surrounding spaces.
 
-The `Current Stage` is an automatic, formula-driven column on both campaign sheets:
+Summary KPIs use expanding structured table references:
 
-> **📧 Email Workflow Stages**
-> `No checklist items checked` ➔ `Source Code` ➔ `Creative Brief` ➔ `Waiting for SKUs` ➔ `With Design` ➔ `Build / QA` ➔ `Routing` ➔ `Awaiting Approval` ➔ `Segments` ➔ `Links Pending` ➔ `Ready to Schedule` ➔ `Scheduled` ➔ `Sent` *(when `Delivered` > 0)*.
+- Active Work
+- Sending Today
+- Email Active
+- SMS Active
+- Approval Pending
+- Sent
 
-> **📱 SMS Workflow Stages**
-> `SMS Options` ➔ `Send Test` ➔ `Awaiting Approval` ➔ `Segments` ➔ `Links Pending` ➔ `Ready to Schedule` ➔ `Scheduled` ➔ `Sent` *(when `Delivered` > 0)*.
+## Timed Link Labels
 
-</details>
+The `JIRA`, `ClickUp`, `Bluecore/Attentive`, and `Proof of Schedule` link
+columns use native `HYPERLINK` formulas. They display the full URL until
+exactly seven days after `Send Date` and numeric `Send Time`, then display the
+clean platform name while preserving the same clickable URL.
 
-<br>
+For `STO`, `Local Timezone`, or a blank Send Time, the seven-day period starts
+at midnight on the Send Date. Excel for the web updates the label when the
+workbook recalculates; desktop Excel also schedules the next due refresh while
+the workbook remains open.
 
-<details>
-<summary><b>☁️ Compatibility & SharePoint Coauthoring</b></summary>
-<br>
+## Excel And SharePoint Compatibility
 
-*   ✅ **Native Checkboxes**: Built using modern Microsoft 365 native in-cell checkboxes (evaluating to true Boolean `TRUE`/`FALSE`). Legacy systems double-click cells for a visual Boolean fallback.
-*   🌐 **Excel for the Web**: Supports web-based edits, coauthoring, and automated formula calculations.
-*   💻 **VBA Macros**: Microsoft limits VBA execution to Desktop Excel. Consequently, automatic updater auditing (timestamps/editor user logging), dashboard snapshot generation, and daily digests require opening the workbook in Desktop Excel.
+Native formulas, tables, filters, formats, and saved checkbox values work in
+desktop Excel and Excel for the web.
 
-> [!WARNING]
-> **Macro Limitations on the Web:** Ensure you open the workbook in the Desktop App if you need to run automated reporting tools or use audit stamping!
+VBA does not execute in Excel for the web. Open the workbook in desktop Excel
+with macros enabled for:
 
-</details>
+- automatic audit timestamps and editor names
+- event-driven formatting repair
+- checkbox double-click fallback
+- Dashboard refresh commands
+- automation logging
 
----
+Use SharePoint version history as the authoritative editor record for web
+changes.
 
-## 📈 Reporting Analysis
+## Maintenance
 
-Located in the [`Reporting Analysis`](Reporting%20Analysis/) directory. *(Currently empty / under development)*.
+The `Notes - Instructions` worksheet password is `adorama2024`. Protection is
+an accidental-edit safeguard, not encryption.
 
-<br>
+Do not rename workbook tables or headers, expose or edit Dashboard helper
+columns `AA:AL`, add blank lines after VBA continuation characters, or convert
+the files to `.xlsx`.
 
-<div align="center">
-  <sub>Built with ❤️ for Production Teams</sub>
-</div>
+See [AI Documentation Notes.md](AI%20Documentation%20Notes.md) for the detailed
+technical architecture and QA process.

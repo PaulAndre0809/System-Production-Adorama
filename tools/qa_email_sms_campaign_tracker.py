@@ -13,6 +13,7 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
+import datetime as dt
 
 import pythoncom
 import pywintypes
@@ -31,6 +32,9 @@ EXPECTED_CAMPAIGN_TYPES = [
 ]
 
 EXPECTED_LAST_REFRESH_FORMULA = '=TEXT(NOW(),"m/d/yyyy h:mm AM/PM")'
+EXPECTED_SEND_DATE_FORMAT = "dddd, mmmm d, yyyy"
+EXPECTED_SEND_TIME_FORMAT = "h:mm am/pm"
+NOTES_PASSWORD = "adorama2024"
 
 
 def retry(label, func, attempts=20, delay=0.75):
@@ -66,6 +70,135 @@ def column_by_header(list_object, header_name: str):
 
 def nonempty(value) -> bool:
     return value is not None and str(value).strip() != ""
+
+
+def range_has_content(cell_range) -> bool:
+    """Return True when any cell in a multi-cell COM range has a value."""
+    values = cell_range.Value
+    if values is None:
+        return False
+    if not isinstance(values, tuple):
+        return nonempty(values)
+    return any(
+        nonempty(value)
+        for row in values
+        for value in (row if isinstance(row, tuple) else (row,))
+    )
+
+
+def assert_valid_vba_continuations(workbook, checks: list[str]) -> None:
+    """Detect the blank-after-underscore corruption that breaks VBA compile."""
+    malformed: list[str] = []
+    for component_index in range(1, workbook.VBProject.VBComponents.Count + 1):
+        component = workbook.VBProject.VBComponents(component_index)
+        code_module = component.CodeModule
+        if not code_module.CountOfLines:
+            continue
+        code = code_module.Lines(1, code_module.CountOfLines)
+        lines = code.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        for index, line in enumerate(lines[:-1]):
+            if line.rstrip().endswith("_") and not lines[index + 1].strip():
+                malformed.append(f"{component.Name}:{index + 1}")
+    if malformed:
+        raise AssertionError(
+            "Malformed VBA continuations found: " + ", ".join(malformed[:20])
+        )
+    checks.append("VBA continuation syntax is structurally valid")
+
+
+def excel_date(value) -> dt.date | None:
+    """Convert an Excel date value to a Python date for KPI verification."""
+    if value is None:
+        return None
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    if isinstance(value, (int, float)):
+        return dt.date(1899, 12, 30) + dt.timedelta(days=int(value))
+    return None
+
+
+def campaign_kpi_counts(table) -> dict[str, int]:
+    """Calculate expected KPI values directly from one campaign table."""
+    headers = {
+        str(table.ListColumns(index).Name): index - 1
+        for index in range(1, table.ListColumns.Count + 1)
+    }
+    values = table.DataBodyRange.Value2
+    rows = values if isinstance(values, tuple) else ((values,),)
+    counts = {"active": 0, "today": 0, "approval": 0, "sent": 0}
+
+    for row in rows:
+        campaign = row[headers["Campaign Name"]]
+        if not nonempty(campaign):
+            continue
+        notes = str(row[headers["Notes"]] or "").strip().lower()
+        stage = str(row[headers["Current Stage"]] or "").strip().lower()
+        cancelled = (
+            notes in {"cancelled", "canceled"}
+            or stage in {"cancelled", "canceled"}
+        )
+        delivered_value = row[headers["Delivered"]]
+        try:
+            delivered = float(delivered_value or 0)
+        except (TypeError, ValueError):
+            delivered = 0
+
+        if delivered > 0 and not cancelled:
+            counts["sent"] += 1
+        elif not cancelled:
+            counts["active"] += 1
+        if not cancelled and excel_date(row[headers["Send Date"]]) == dt.date.today():
+            counts["today"] += 1
+        if not cancelled and not bool(row[headers["Approval"]]):
+            counts["approval"] += 1
+    return counts
+
+
+def assert_dashboard_kpis(
+    dashboard,
+    email_table,
+    sms_table,
+    checks: list[str],
+) -> None:
+    """Verify KPI formulas and displayed values against source-table data."""
+    for address in ("C5", "E5", "G5", "I5", "K5"):
+        formula = str(dashboard.Range(address).Formula2)
+        if "@Delivered" in formula or "--@Email" in formula or "--@SMS" in formula:
+            raise AssertionError(
+                f"Dashboard KPI {address} still uses implicit intersection"
+            )
+
+    dashboard.Range("A5:K5").Calculate()
+    email = campaign_kpi_counts(email_table)
+    sms = campaign_kpi_counts(sms_table)
+    expected = {
+        "A5": email["active"] + sms["active"],
+        "C5": email["today"] + sms["today"],
+        "E5": email["active"],
+        "G5": sms["active"],
+        "I5": email["approval"] + sms["approval"],
+        "K5": email["sent"] + sms["sent"],
+    }
+    for address, expected_value in expected.items():
+        actual = int(dashboard.Range(address).Value or 0)
+        if actual != expected_value:
+            raise AssertionError(
+                f"Dashboard KPI {address} is {actual}; expected {expected_value}"
+            )
+    for footer_address, source_address in {
+        "C162": "C5",
+        "C163": "E5",
+        "C164": "G5",
+        "C165": "I5",
+        "C166": "K5",
+    }.items():
+        if str(dashboard.Range(footer_address).Formula2) != f"={source_address}":
+            raise AssertionError(
+                f"Dashboard footer {footer_address} is not linked to {source_address}"
+            )
+    checks.append("Dashboard KPI formulas use expanding references and match source data")
 
 
 def assert_zip_integrity(path: Path, checks: list[str]) -> None:
@@ -105,6 +238,7 @@ def validate_workbook(path: Path) -> list[str]:
                 str(qa_path), UpdateLinks=0, ReadOnly=False, AddToMru=False
             ),
         )
+        assert_valid_vba_continuations(workbook, checks)
 
         validation = retry(
             "embedded validation",
@@ -122,6 +256,55 @@ def validate_workbook(path: Path) -> list[str]:
             "SMSCampaignsTable"
         )
         dashboard_table = dashboard.ListObjects("DashboardWorkTable")
+
+        calendar_sheets = [
+            workbook.Worksheets(index).Name
+            for index in range(1, workbook.Worksheets.Count + 1)
+            if "calendar" in str(workbook.Worksheets(index).Name).lower()
+        ]
+        if calendar_sheets:
+            raise AssertionError(f"Retired Calendar sheets still exist: {calendar_sheets}")
+        comparison_tables = [
+            dashboard.ListObjects(index).Name
+            for index in range(1, dashboard.ListObjects.Count + 1)
+            if "deliveredcomparison"
+            in str(dashboard.ListObjects(index).Name).lower()
+        ]
+        if comparison_tables:
+            raise AssertionError(
+                f"Retired comparison tables still exist: {comparison_tables}"
+            )
+        comparison_charts = [
+            dashboard.ChartObjects(index).Name
+            for index in range(1, dashboard.ChartObjects().Count + 1)
+            if "delivered" in str(dashboard.ChartObjects(index).Name).lower()
+            and "comparison" in str(dashboard.ChartObjects(index).Name).lower()
+        ]
+        if comparison_charts:
+            raise AssertionError(
+                f"Retired comparison charts still exist: {comparison_charts}"
+            )
+        if range_has_content(dashboard.Range("N2:S44")):
+            raise AssertionError("Retired Dashboard comparison cells are not empty")
+        if range_has_content(
+            dashboard.Range("A7:L7")
+        ) or dashboard.Range("A7:L7").Hyperlinks.Count:
+            raise AssertionError("Retired Dashboard calendar links are not empty")
+        notes = workbook.Worksheets("Notes - Instructions")
+        if notes.Range("A1").Value != "Detailed Notes and Instructions":
+            raise AssertionError("Notes - Instructions title is outdated")
+        notes_text = str(notes.UsedRange.Value)
+        if "intentionally removed" not in notes_text:
+            raise AssertionError("Notes do not document the retired features")
+        if "Wednesday, June 10, 2026" not in notes_text:
+            raise AssertionError("Notes do not document the Send Date format")
+        if "STO or Local Timezone" not in notes_text:
+            raise AssertionError("Notes do not document allowed Send Time text")
+        if "Timed Link Labels" not in notes_text:
+            raise AssertionError("Notes do not document seven-day link labels")
+        if "Cancelled Campaigns" not in notes_text:
+            raise AssertionError("Notes do not document Dashboard cancellation filtering")
+        checks.append("Calendar sheets and weekly Dashboard comparisons are retired")
 
         if dashboard.Range("B3").Formula != EXPECTED_LAST_REFRESH_FORMULA:
             raise AssertionError(f"Unexpected Last Refresh formula: {dashboard.Range('B3').Formula}")
@@ -143,6 +326,7 @@ def validate_workbook(path: Path) -> list[str]:
         if dashboard.Columns("D").ColumnWidth < 22:
             raise AssertionError("Dashboard Last Edited By column is too narrow")
         checks.append("Dashboard refresh and audit user formulas and widths")
+        assert_dashboard_kpis(dashboard, email_table, sms_table, checks)
 
         if not email_table.ShowAutoFilter:
             raise AssertionError("Email Campaigns table filter dropdowns are disabled")
@@ -185,9 +369,15 @@ def validate_workbook(path: Path) -> list[str]:
             last_updated_by = column_by_header(table, "Last Updated By")
             if send_date is None or send_time is None or last_updated is None:
                 raise AssertionError(f"Missing date/time columns on {table.Name}")
-            if "mm/dd/yyyy" not in send_date.DataBodyRange.NumberFormat.lower():
+            if (
+                str(send_date.DataBodyRange.NumberFormat).lower()
+                != EXPECTED_SEND_DATE_FORMAT
+            ):
                 raise AssertionError(f"Send Date format is wrong on {table.Name}")
-            if "am/pm" not in str(send_time.DataBodyRange.NumberFormat).lower():
+            if (
+                str(send_time.DataBodyRange.NumberFormat).lower()
+                != EXPECTED_SEND_TIME_FORMAT
+            ):
                 raise AssertionError(f"Send Time format is not 12-hour on {table.Name}")
             if "am/pm" not in str(last_updated.DataBodyRange.NumberFormat).lower():
                 raise AssertionError(f"Last Updated format is not 12-hour on {table.Name}")
@@ -196,7 +386,40 @@ def validate_workbook(path: Path) -> list[str]:
             last_updated_by.DataBodyRange.Cells(1, 1).Value = "Manual Web User"
             if last_updated_by.DataBodyRange.Cells(1, 1).Value != "Manual Web User":
                 raise AssertionError(f"Last Updated By is not manually editable on {table.Name}")
-        checks.append("MM/DD/YYYY dates, 12-hour times, and editable audit user cells")
+            date_cell = send_date.DataBodyRange.Cells(1, 1)
+            time_cell = send_time.DataBodyRange.Cells(1, 1)
+            old_date = date_cell.Value2
+            old_time = time_cell.Value2
+            date_cell.Value2 = 46183  # June 10, 2026
+            if str(date_cell.Text) != "Wednesday, June 10, 2026":
+                raise AssertionError(
+                    f"Send Date display is wrong on {table.Name}: {date_cell.Text}"
+                )
+            for value in ("STO", "Local Timezone"):
+                time_cell.Value2 = value
+                if time_cell.Value2 != value:
+                    raise AssertionError(
+                        f"Send Time rejected {value!r} on {table.Name}"
+                    )
+            time_cell.Value2 = 10 / 24
+            if str(time_cell.Text).upper() != "10:00 AM":
+                raise AssertionError(
+                    f"Send Time display is wrong on {table.Name}: {time_cell.Text}"
+                )
+            date_cell.Value2 = old_date
+            time_cell.Value2 = old_time
+
+        notes.Unprotect(Password=NOTES_PASSWORD)
+        if notes.ProtectContents:
+            raise AssertionError("Notes password did not unlock the sheet")
+        notes.Protect(
+            Password=NOTES_PASSWORD,
+            UserInterfaceOnly=True,
+            AllowFiltering=True,
+        )
+        checks.append(
+            "long-date display, permissive 12-hour times, and verified Notes password"
+        )
 
         # Desktop Excel only: verify the embedded Worksheet_Change path stamps the
         # row audit columns when a user-editable campaign cell changes.
@@ -207,7 +430,36 @@ def validate_workbook(path: Path) -> list[str]:
             raise AssertionError("Missing columns needed for desktop audit stamping test")
         old_timestamp = last_updated_col.DataBodyRange.Cells(1, 1).Value2
         old_owner = owner_col.DataBodyRange.Cells(1, 1).Value
+        event_date = column_by_header(email_table, "Send Date").DataBodyRange.Cells(1, 1)
+        event_time = column_by_header(email_table, "Send Time").DataBodyRange.Cells(1, 1)
+        old_event_date = event_date.Value2
+        old_event_time = event_time.Value2
         excel.EnableEvents = True
+
+        event_date.NumberFormat = "General"
+        event_date.Value2 = 46183
+        if (
+            str(event_date.NumberFormat).lower() != EXPECTED_SEND_DATE_FORMAT
+            or str(event_date.Text) != "Wednesday, June 10, 2026"
+        ):
+            raise AssertionError("Desktop date edit did not restore long-date formatting")
+
+        event_time.NumberFormat = "General"
+        for value in ("STO", "Local Timezone"):
+            event_time.Value2 = value
+            if (
+                event_time.Value2 != value
+                or str(event_time.NumberFormat).lower() != EXPECTED_SEND_TIME_FORMAT
+            ):
+                raise AssertionError(
+                    f"Desktop time edit did not preserve {value!r}"
+                )
+        event_time.Value2 = 10 / 24
+        if str(event_time.Text).upper() != "10:00 AM":
+            raise AssertionError("Desktop numeric time edit is not 12-hour formatted")
+
+        event_date.Value2 = old_event_date
+        event_time.Value2 = old_event_time
         owner_col.DataBodyRange.Cells(1, 1).Value = f"{old_owner or 'QA User'} audit test"
         retry("desktop audit event calculate", lambda: dashboard.Range("B3:D3").Calculate())
         excel.EnableEvents = False
@@ -219,15 +471,51 @@ def validate_workbook(path: Path) -> list[str]:
             raise AssertionError("Desktop Worksheet_Change did not update Last Updated")
         if not nonempty(new_user):
             raise AssertionError("Desktop Worksheet_Change did not update Last Updated By")
-        checks.append("desktop edit audit stamping")
+        checks.append("desktop date/time edit repair and audit stamping")
 
         if dashboard_table.ListRows.Count < 150:
             raise AssertionError("Dashboard table is not prepared for native formula rows")
         if not str(dashboard.Range("AA11").Formula2).startswith("=LET("):
             raise AssertionError("Dashboard native helper formula is missing")
+        dashboard_formula = str(dashboard.Range("AA11").Formula2).lower()
+        if "cancelled" not in dashboard_formula or "[current stage]" not in dashboard_formula:
+            raise AssertionError("Dashboard helper does not exclude cancelled campaigns")
         if not dashboard.Columns("AA:AL").Hidden:
             raise AssertionError("Dashboard helper columns AA:AL should be hidden")
-        checks.append("Dashboard native formula feed")
+        checks.append("Dashboard native formula feed excludes cancelled campaigns")
+
+        for table, configurations in (
+            (
+                email_table,
+                (
+                    ("Jira Link", "JIRA"),
+                    ("ClickUp Link", "ClickUp"),
+                    ("Bluecore/Attentive Link", "Bluecore/Attentive"),
+                ),
+            ),
+            (
+                sms_table,
+                (
+                    ("Proof of Schedule", "Proof of Schedule"),
+                    ("Bluecore/Attentive Link", "Bluecore/Attentive"),
+                ),
+            ),
+        ):
+            for header, display_name in configurations:
+                link_cell = column_by_header(table, header).DataBodyRange.Cells(1, 1)
+                if not link_cell.HasFormula:
+                    continue
+                formula = str(link_cell.Formula2)
+                if (
+                    "HYPERLINK(" not in formula.upper()
+                    or "NOW()" not in formula.upper()
+                    or "+7" not in formula
+                    or display_name not in formula
+                ):
+                    raise AssertionError(
+                        f"Timed hyperlink formula is wrong on {table.Name}[{header}]"
+                    )
+        checks.append("supported link columns use native seven-day hyperlink formulas")
 
         links = retry("external links", lambda: workbook.LinkSources(1))
         if links is not None:

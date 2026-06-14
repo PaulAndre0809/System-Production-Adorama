@@ -1,0 +1,30 @@
+Started RebuildMonthlyCalendars
+Month: 1 - GetOrCreate
+Month: 1 - BuildCalendarSheet
+Month: 2 - GetOrCreate
+Month: 2 - BuildCalendarSheet
+Month: 3 - GetOrCreate
+Month: 3 - BuildCalendarSheet
+Month: 4 - GetOrCreate
+Month: 4 - BuildCalendarSheet
+Month: 5 - GetOrCreate
+Month: 5 - BuildCalendarSheet
+Month: 6 - GetOrCreate
+Month: 6 - BuildCalendarSheet
+Month: 7 - GetOrCreate
+Month: 7 - BuildCalendarSheet
+Month: 8 - GetOrCreate
+Month: 8 - BuildCalendarSheet
+Month: 9 - GetOrCreate
+Month: 9 - BuildCalendarSheet
+Month: 10 - GetOrCreate
+Month: 10 - BuildCalendarSheet
+Month: 11 - GetOrCreate
+Month: 11 - BuildCalendarSheet
+Month: 12 - GetOrCreate
+Month: 12 - BuildCalendarSheet
+Deleting README
+Deleting VBA Code
+AddDashboardCalendarLinks
+StyleCoreWorkbookSheets
+Failed: Unable to set the Name property of the Font class (1004)

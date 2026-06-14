@@ -22,6 +22,7 @@ import win32com.client as win32
 
 
 XL_CALC_AUTOMATIC = -4105
+XL_CALC_MANUAL = -4135
 XL_CELL_TYPE_FORMULAS = -4123
 XL_ERRORS = 16
 
@@ -95,6 +96,12 @@ def col_index(list_object, header_name: str) -> int:
 
 def set_table_value(list_row, list_object, header_name: str, value) -> None:
     list_row.Range.Cells(1, col_index(list_object, header_name)).Value = value
+
+
+def set_table_format(list_row, list_object, header_name: str, number_format: str) -> None:
+    list_row.Range.Cells(
+        1, col_index(list_object, header_name)
+    ).NumberFormat = number_format
 
 
 def get_table_value(list_row, list_object, header_name: str):
@@ -194,18 +201,43 @@ def seed_campaign_rows(table, channel: str, today: dt.date) -> dict[str, list]:
         list_row = table.ListRows.Add()
         name = f"QA {channel} Campaign {index:02d}"
         set_table_value(list_row, table, "Send Date", dt.datetime.combine(send_date, dt.time()))
-        set_table_value(list_row, table, "Send Time", time_fraction(8 + (index % 8), 30 if index % 2 else 0))
+        if index == 3:
+            send_time = "STO"
+        elif index == 4:
+            send_time = "Local Timezone"
+        else:
+            send_time = time_fraction(
+                8 + (index % 8), 30 if index % 2 else 0
+            )
+        set_table_value(list_row, table, "Send Time", send_time)
         set_table_value(list_row, table, "Campaign Name", name)
         set_table_value(list_row, table, "Campaign Type", campaign_type)
         set_table_value(list_row, table, "Owner", "QA Harness")
-        set_table_value(list_row, table, "Jira Link", f"https://qa.example.com/jira/{channel.lower()}-{index:02d}")
-        set_table_value(list_row, table, "ClickUp Link", f"https://qa.example.com/clickup/{channel.lower()}-{index:02d}")
+        if channel == "Email":
+            set_table_value(list_row, table, "Jira Link", f"https://qa.example.com/jira/{channel.lower()}-{index:02d}")
+            set_table_value(list_row, table, "ClickUp Link", f"https://qa.example.com/clickup/{channel.lower()}-{index:02d}")
+        else:
+            set_table_value(list_row, table, "Proof of Schedule", f"https://qa.example.com/proof/{channel.lower()}-{index:02d}")
         set_table_value(list_row, table, "Bluecore/Attentive Link", f"https://qa.example.com/build/{channel.lower()}-{index:02d}")
         set_table_value(list_row, table, "Est. Audience", 10000 + index * 1000)
         set_table_value(list_row, table, "Delivered", delivered)
         set_table_value(list_row, table, "Last Updated", now)
         set_table_value(list_row, table, "Last Updated By", "QA Harness")
-        set_table_value(list_row, table, "Notes", f"QA seed row: {note}")
+        cancelled = index == 4
+        set_table_value(
+            list_row,
+            table,
+            "Notes",
+            "  CANCELLED  " if cancelled else f"QA seed row: {note}",
+        )
+        set_table_format(
+            list_row, table, "Send Date", "dddd, mmmm d, yyyy"
+        )
+        set_table_format(list_row, table, "Send Time", "h:mm AM/PM")
+        set_table_format(
+            list_row, table, "Last Updated", "MM/DD/YYYY h:mm AM/PM"
+        )
+        set_table_format(list_row, table, "Last Updated By", "@")
 
         if channel == "Email":
             set_table_value(list_row, table, "Campaign Name and UTM Parameter (Source Code)", index in (1, 2, 3, 4, 5, 6))
@@ -222,15 +254,33 @@ def seed_campaign_rows(table, channel: str, today: dt.date) -> dict[str, list]:
             set_table_value(list_row, table, "Approval", approval)
             set_table_value(list_row, table, "Segments", segments)
 
-        rows.append({"name": name, "row": list_row, "date": send_date, "delivered": delivered})
+        rows.append(
+            {
+                "name": name,
+                "row": list_row,
+                "date": send_date,
+                "delivered": delivered,
+                "cancelled": cancelled,
+            }
+        )
 
     return {
         "all": rows,
         "dashboard_expected": [
-            row for row in rows if ws <= row["date"] <= ws + dt.timedelta(days=13)
+            row
+            for row in rows
+            if (
+                ws <= row["date"] <= ws + dt.timedelta(days=13)
+                and not row["cancelled"]
+            )
         ],
         "dashboard_excluded": [
-            row for row in rows if not (ws <= row["date"] <= ws + dt.timedelta(days=13))
+            row
+            for row in rows
+            if (
+                not (ws <= row["date"] <= ws + dt.timedelta(days=13))
+                or row["cancelled"]
+            )
         ],
         "filter_visible": [
             row for row in rows if row["date"] >= today.replace(day=1) and row["delivered"] <= 0
@@ -309,45 +359,32 @@ def assert_checklist_columns(table, checklist_headers: list[str], checks: list[s
 def assert_stage_values(table, seeded_rows: list[dict], channel: str, checks: list[str]) -> None:
     for row_info in seeded_rows:
         value = str(get_table_value(row_info["row"], table, "Current Stage") or "")
-        approval = get_table_value(row_info["row"], table, "Approval")
-        segments = get_table_value(row_info["row"], table, "Segments")
-        est_audience = get_table_value(row_info["row"], table, "Est. Audience")
-        
-        # Check if all checkboxes are True for this channel
-        all_checked = False
-        if channel == "Email":
-            all_checked = (
-                get_table_value(row_info["row"], table, "Campaign Name and UTM Parameter (Source Code)") and
-                get_table_value(row_info["row"], table, "Creative Brief, SL & PH") and
-                get_table_value(row_info["row"], table, "SKUs") and
-                get_table_value(row_info["row"], table, "In-Design") and
-                get_table_value(row_info["row"], table, "Build, QA") and
-                get_table_value(row_info["row"], table, "Route") and
-                approval and segments
-            )
-        else:
-            all_checked = (
-                get_table_value(row_info["row"], table, "Send SMS Options") and
-                get_table_value(row_info["row"], table, "Send Test") and
-                approval and segments
-            )
+        headers = EMAIL_CHECKLIST if channel == "Email" else SMS_CHECKLIST
+        checked_headers = [
+            header
+            for header in headers
+            if bool(get_table_value(row_info["row"], table, header))
+        ]
 
-        has_audience = est_audience is not None and str(est_audience).strip() != "" and float(est_audience) > 0
-        
         if not value:
             raise AssertionError(f"Current Stage is blank for {row_info['name']}")
-            
-        if all_checked and has_audience:
-            if value != "Completed":
-                raise AssertionError(f"Current Stage should be 'Completed' for fully checked row {row_info['name']}, got: {value}")
+
+        if checked_headers:
+            if not value.startswith("Checked: "):
+                raise AssertionError(
+                    f"Current Stage did not list checked items for {row_info['name']}: {value}"
+                )
+            for header in checked_headers:
+                if header not in value:
+                    raise AssertionError(
+                        f"Current Stage omitted {header!r} for {row_info['name']}: {value}"
+                    )
         else:
-            if row_info["name"].endswith("01") and "Checked:" not in value:
-                raise AssertionError(f"Current Stage did not list checked items for {row_info['name']}: {value}")
-            if channel == "Email" and row_info["name"].endswith("01") and "Campaign Name and UTM Parameter" not in value:
-                raise AssertionError(f"Email Current Stage missing checked source-code step: {value}")
-            if channel == "SMS" and row_info["name"].endswith("01") and "Send SMS Options" not in value:
-                raise AssertionError(f"SMS Current Stage missing checked SMS step: {value}")
-    checks.append(f"{channel} Current Stage formulas update from checked columns and show 'Completed'")
+            if value != "No checklist items checked":
+                raise AssertionError(
+                    f"Current Stage should show no checked items for {row_info['name']}: {value}"
+                )
+    checks.append(f"{channel} Current Stage lists every checked workflow column")
 
 
 def assert_dashboard_rows(dashboard_table, email_seed, sms_seed, checks: list[str]) -> None:
@@ -371,29 +408,138 @@ def assert_dashboard_rows(dashboard_table, email_seed, sms_seed, checks: list[st
     checks.append("Dashboard current-week through next-week feed and friendly statuses")
 
 
-def assert_calendar_rows(workbook, email_seed, sms_seed, today: dt.date, checks: list[str]) -> None:
-    current_sheet = workbook.Worksheets("2026 " + today.strftime("%B") + " Calendar")
-    current_text = sheet_text(current_sheet)
-    for row_info in email_seed["dashboard_expected"][:2] + sms_seed["dashboard_expected"][:2]:
-        if row_info["date"].month == today.month and row_info["name"] not in current_text:
-            raise AssertionError(f"Current month calendar missing {row_info['name']}")
+def source_kpi_counts(table, today: dt.date) -> dict[str, int]:
+    """Calculate expected Dashboard KPI values from the source table."""
+    rows = table.DataBodyRange.Value2
+    rows = rows if isinstance(rows, tuple) else ((rows,),)
+    indices = {
+        str(table.ListColumns(index).Name): index - 1
+        for index in range(1, table.ListColumns.Count + 1)
+    }
+    counts = {"active": 0, "today": 0, "approval": 0, "sent": 0}
 
-    previous_month = first_of_previous_month(today)
-    previous_sheet = workbook.Worksheets("2026 " + previous_month.strftime("%B") + " Calendar")
-    previous_text = sheet_text(previous_sheet)
-    previous_names = [
-        row["name"]
-        for row in email_seed["all"] + sms_seed["all"]
-        if row["date"].month == previous_month.month
+    for row in rows:
+        campaign = row[indices["Campaign Name"]]
+        if campaign is None or not str(campaign).strip():
+            continue
+        notes = str(row[indices["Notes"]] or "").strip().lower()
+        stage = str(row[indices["Current Stage"]] or "").strip().lower()
+        cancelled = (
+            notes in {"cancelled", "canceled"}
+            or stage in {"cancelled", "canceled"}
+        )
+        delivered_value = row[indices["Delivered"]]
+        try:
+            delivered = float(delivered_value or 0)
+        except (TypeError, ValueError):
+            delivered = 0
+
+        if delivered > 0 and not cancelled:
+            counts["sent"] += 1
+        elif not cancelled:
+            counts["active"] += 1
+        if not cancelled and excel_date(row[indices["Send Date"]]) == today:
+            counts["today"] += 1
+        if not cancelled and not bool(row[indices["Approval"]]):
+            counts["approval"] += 1
+    return counts
+
+
+def assert_dashboard_kpis(
+    dashboard,
+    email_table,
+    sms_table,
+    today: dt.date,
+    checks: list[str],
+) -> None:
+    """Verify all six KPI values and reject implicit-intersection formulas."""
+    for address in ("C5", "E5", "G5", "I5", "K5"):
+        formula = str(dashboard.Range(address).Formula2)
+        if "@Delivered" in formula or "--@Email" in formula or "--@SMS" in formula:
+            raise AssertionError(f"Dashboard KPI {address} uses implicit intersection")
+
+    email = source_kpi_counts(email_table, today)
+    sms = source_kpi_counts(sms_table, today)
+    expected = {
+        "A5": email["active"] + sms["active"],
+        "C5": email["today"] + sms["today"],
+        "E5": email["active"],
+        "G5": sms["active"],
+        "I5": email["approval"] + sms["approval"],
+        "K5": email["sent"] + sms["sent"],
+    }
+    for address, expected_value in expected.items():
+        actual = int(dashboard.Range(address).Value or 0)
+        if actual != expected_value:
+            raise AssertionError(
+                f"Dashboard KPI {address} is {actual}; expected {expected_value}"
+            )
+    for footer_address, source_address in {
+        "C162": "C5",
+        "C163": "E5",
+        "C164": "G5",
+        "C165": "I5",
+        "C166": "K5",
+    }.items():
+        if str(dashboard.Range(footer_address).Formula2) != f"={source_address}":
+            raise AssertionError(
+                f"Dashboard footer {footer_address} is not linked to {source_address}"
+            )
+    checks.append("Dashboard KPI formulas and values match all source rows")
+
+
+def assert_retired_features(workbook, dashboard, checks: list[str]) -> None:
+    calendar_sheets = [
+        workbook.Worksheets(index).Name
+        for index in range(1, workbook.Worksheets.Count + 1)
+        if "calendar" in str(workbook.Worksheets(index).Name).lower()
     ]
-    for name in previous_names[:2]:
-        if name not in previous_text:
-            raise AssertionError(f"Previous month calendar missing {name}")
+    if calendar_sheets:
+        raise AssertionError(f"Retired Calendar sheets still exist: {calendar_sheets}")
 
-    expected_current_color = 5287936  # RGB(0, 176, 80)
-    if int(current_sheet.Tab.Color) != expected_current_color:
-        raise AssertionError("Current month calendar tab is not green")
-    checks.append("calendar sheets include Email/SMS rows and highlight current month")
+    comparison_tables = [
+        dashboard.ListObjects(index).Name
+        for index in range(1, dashboard.ListObjects.Count + 1)
+        if "deliveredcomparison" in str(dashboard.ListObjects(index).Name).lower()
+    ]
+    if comparison_tables:
+        raise AssertionError(f"Retired comparison tables still exist: {comparison_tables}")
+
+    comparison_charts = [
+        dashboard.ChartObjects(index).Name
+        for index in range(1, dashboard.ChartObjects().Count + 1)
+        if "delivered" in str(dashboard.ChartObjects(index).Name).lower()
+        and "comparison" in str(dashboard.ChartObjects(index).Name).lower()
+    ]
+    if comparison_charts:
+        raise AssertionError(f"Retired comparison charts still exist: {comparison_charts}")
+
+    if any(
+        value is not None and str(value).strip()
+        for value in flatten_values(dashboard.Range("N2:S44").Value)
+    ):
+        raise AssertionError("Retired Dashboard comparison cells are not empty")
+    if any(
+        value is not None and str(value).strip()
+        for value in flatten_values(dashboard.Range("A7:L7").Value)
+    ) or dashboard.Range("A7:L7").Hyperlinks.Count:
+        raise AssertionError("Retired Dashboard calendar navigation is not empty")
+
+    notes = workbook.Worksheets("Notes - Instructions")
+    notes_text = sheet_text(notes)
+    if notes.Range("A1").Value != "Detailed Notes and Instructions":
+        raise AssertionError("Notes - Instructions title is outdated")
+    if "intentionally removed" not in notes_text:
+        raise AssertionError("Notes do not document the retired features")
+    if "Wednesday, June 10, 2026" not in notes_text:
+        raise AssertionError("Notes do not document the Send Date format")
+    if "STO or Local Timezone" not in notes_text:
+        raise AssertionError("Notes do not document allowed Send Time text")
+    if "Timed Link Labels" not in notes_text:
+        raise AssertionError("Notes do not document timed link labels")
+    if "Cancelled Campaigns" not in notes_text:
+        raise AssertionError("Notes do not document cancellation filtering")
+    checks.append("Calendar sheets and weekly Dashboard comparisons remain retired")
 
 
 def assert_filters(table, seed, today: dt.date, checks: list[str]) -> None:
@@ -423,41 +569,6 @@ def assert_filters(table, seed, today: dt.date, checks: list[str]) -> None:
     checks.append(f"{table.Name} filters can hide completed and previous-month campaigns")
 
 
-def assert_delivered_comparison(workbook, email_table, today: dt.date, checks: list[str]) -> None:
-    dashboard = workbook.Worksheets("Dashboard")
-    week_start = week_start_sunday(today)
-    last_start = week_start - dt.timedelta(days=7)
-    last_end = week_start - dt.timedelta(days=1)
-    current_end = week_start + dt.timedelta(days=6)
-
-    date_col = col_index(email_table, "Send Date")
-    delivered_col = col_index(email_table, "Delivered")
-    expected_last = 0
-    expected_current = 0
-    values = email_table.DataBodyRange.Value2
-    for row in values:
-        row_date = excel_date(row[date_col - 1])
-        delivered = row[delivered_col - 1] or 0
-        if row_date is None:
-            continue
-        if last_start <= row_date <= last_end:
-            expected_last += float(delivered)
-        if week_start <= row_date <= current_end:
-            expected_current += float(delivered)
-
-    actual_last = float(dashboard.Range("Q4").Value or 0)
-    actual_current = float(dashboard.Range("Q5").Value or 0)
-    if round(actual_last, 4) != round(expected_last, 4):
-        raise AssertionError(f"Delivered comparison last week mismatch: {actual_last} vs {expected_last}")
-    if round(actual_current, 4) != round(expected_current, 4):
-        raise AssertionError(f"Delivered comparison current week mismatch: {actual_current} vs {expected_current}")
-    if excel_date(dashboard.Range("O5").Value) != week_start or excel_date(dashboard.Range("P5").Value) != current_end:
-        raise AssertionError("Delivered comparison is not using Sunday-Saturday current week")
-    if not any(chart.Name == "DeliveredEmailComparisonChart" for chart in dashboard.ChartObjects()):
-        raise AssertionError("Delivered email comparison chart is missing")
-    checks.append("Delivered comparison chart/table uses Sunday-Saturday weeks")
-
-
 def assert_dashboard_audit_header(dashboard, checks: list[str]) -> None:
     if dashboard.Range("A3").Value != "Last Refresh":
         raise AssertionError("Dashboard Last Refresh label missing")
@@ -472,19 +583,35 @@ def assert_dashboard_audit_header(dashboard, checks: list[str]) -> None:
 
 def assert_formats_and_ui(workbook, email_table, sms_table, checks: list[str]) -> None:
     for table in (email_table, sms_table):
+        row_count = table.DataBodyRange.Rows.Count
+        sample_rows = sorted(
+            {1, 2, 3}
+            | set(range(max(1, row_count - 11), row_count + 1))
+        )
         for header, expected in (
-            ("Send Date", "mm/dd/yyyy"),
-            ("Send Time", "am/pm"),
+            ("Send Date", "dddd, mmmm d, yyyy"),
+            ("Send Time", "h:mm am/pm"),
             ("Last Updated", "am/pm"),
             ("Last Updated By", "@"),
         ):
             col = column_by_header(table, header)
-            actual = str(col.DataBodyRange.NumberFormat).lower()
-            if expected == "@":
-                if actual != "@":
-                    raise AssertionError(f"{table.Name}[{header}] should be text format")
-            elif expected not in actual:
-                raise AssertionError(f"{table.Name}[{header}] format is wrong: {actual}")
+            for row_index in sample_rows:
+                actual = str(
+                    col.DataBodyRange.Cells(row_index, 1).NumberFormat
+                ).lower()
+                if expected == "@":
+                    if actual != "@":
+                        raise AssertionError(
+                            f"{table.Name}[{header}] row {row_index} should be text format"
+                        )
+                elif header in {"Send Date", "Send Time"} and expected != actual:
+                    raise AssertionError(
+                        f"{table.Name}[{header}] row {row_index} format is wrong: {actual}"
+                    )
+                elif header not in {"Send Date", "Send Time"} and expected not in actual:
+                    raise AssertionError(
+                        f"{table.Name}[{header}] row {row_index} format is wrong: {actual}"
+                    )
         if not table.ShowAutoFilter:
             raise AssertionError(f"{table.Name} filter dropdowns are disabled")
 
@@ -504,9 +631,132 @@ def assert_links_and_hidden_helpers(workbook, dashboard, checks: list[str]) -> N
         raise AssertionError(f"External workbook links detected: {links}")
     if not dashboard.Columns("AA:AL").Hidden:
         raise AssertionError("Dashboard helper columns AA:AL should be hidden")
-    if not str(dashboard.Range("AA11").Formula2).startswith("=LET("):
+    dashboard_formula = str(dashboard.Range("AA11").Formula2)
+    if not dashboard_formula.startswith("=LET("):
         raise AssertionError("Dashboard native helper formula is missing")
+    lowered_formula = dashboard_formula.lower()
+    if "cancelled" not in lowered_formula or "[current stage]" not in lowered_formula:
+        raise AssertionError("Dashboard native helper does not exclude cancelled rows")
     checks.append("hidden Dashboard helpers and no external workbook links")
+
+
+def assert_timed_hyperlinks(
+    workbook,
+    email_table,
+    sms_table,
+    email_seed,
+    sms_seed,
+    checks: list[str],
+) -> None:
+    """Verify both sides of the exact seven-day link-label boundary."""
+    retry(
+        "ApplyTimedCampaignLinks",
+        lambda: workbook.Application.Run(
+            macro_name(workbook, "ApplyTimedCampaignLinks")
+        ),
+    )
+
+    now = dt.datetime.now().replace(microsecond=0)
+    before_maturity = now - dt.timedelta(days=7) + dt.timedelta(minutes=10)
+    after_maturity = now - dt.timedelta(days=7) - dt.timedelta(minutes=10)
+
+    for table, seed, configurations in (
+        (
+            email_table,
+            email_seed,
+            (
+                ("Jira Link", "JIRA"),
+                ("ClickUp Link", "ClickUp"),
+                ("Bluecore/Attentive Link", "Bluecore/Attentive"),
+            ),
+        ),
+        (
+            sms_table,
+            sms_seed,
+            (
+                ("Proof of Schedule", "Proof of Schedule"),
+                ("Bluecore/Attentive Link", "Bluecore/Attentive"),
+            ),
+        ),
+    ):
+        test_row = seed["all"][9]["row"]
+        set_table_value(
+            test_row,
+            table,
+            "Send Date",
+            dt.datetime.combine(before_maturity.date(), dt.time()),
+        )
+        set_table_value(
+            test_row,
+            table,
+            "Send Time",
+            time_fraction(before_maturity.hour, before_maturity.minute),
+        )
+
+        for header, display_name in configurations:
+            cell = test_row.Range.Cells(1, col_index(table, header))
+            address = str(cell.Value2 or "")
+            if not address.lower().startswith("http"):
+                formula = str(cell.Formula2 or "")
+                match = formula.split('"', 2)
+                address = match[1].replace('""', '"') if len(match) >= 3 else ""
+            cell.Calculate()
+            formula = str(cell.Formula2 or "")
+            if (
+                "HYPERLINK(" not in formula.upper()
+                or "NOW()" not in formula.upper()
+                or "+7" not in formula
+                or address not in formula
+            ):
+                raise AssertionError(
+                    f"Timed formula is incomplete on {table.Name}[{header}]"
+                )
+            if str(cell.Value2) != address:
+                raise AssertionError(
+                    f"{table.Name}[{header}] matured before seven full days"
+                )
+
+        set_table_value(
+            test_row,
+            table,
+            "Send Date",
+            dt.datetime.combine(after_maturity.date(), dt.time()),
+        )
+        set_table_value(
+            test_row,
+            table,
+            "Send Time",
+            time_fraction(after_maturity.hour, after_maturity.minute),
+        )
+        for header, display_name in configurations:
+            cell = test_row.Range.Cells(1, col_index(table, header))
+            cell.Calculate()
+            if str(cell.Value2) != display_name:
+                raise AssertionError(
+                    f"{table.Name}[{header}] did not mature to {display_name!r}"
+                )
+
+        set_table_value(
+            test_row,
+            table,
+            "Send Date",
+            dt.datetime.combine(
+                dt.date.today() - dt.timedelta(days=8),
+                dt.time(),
+            ),
+        )
+        set_table_value(test_row, table, "Send Time", "STO")
+        for header, display_name in configurations:
+            cell = test_row.Range.Cells(1, col_index(table, header))
+            cell.Calculate()
+            if str(cell.Value2) != display_name:
+                raise AssertionError(
+                    f"{table.Name}[{header}] text-time fallback is incorrect"
+                )
+
+    checks.append(
+        "all supported hyperlinks switch at the seven-day timestamp, including text-time fallback"
+    )
 
 
 def validate_extensively(path: Path) -> tuple[list[str], dict[str, float]]:
@@ -537,6 +787,7 @@ def validate_extensively(path: Path) -> tuple[list[str], dict[str, float]]:
             lambda: excel.Workbooks.Open(str(qa_path), UpdateLinks=0, ReadOnly=False, AddToMru=False),
         )
         timings["open_seconds"] = time.perf_counter() - start
+        excel.Calculation = XL_CALC_MANUAL
 
         start = time.perf_counter()
         validation = retry(
@@ -548,10 +799,10 @@ def validate_extensively(path: Path) -> tuple[list[str], dict[str, float]]:
             raise AssertionError(f"Embedded validation failed: {validation}")
         checks.append("embedded validation macro")
 
-        start = time.perf_counter()
-        retry("ApplyAllConfigurations", lambda: excel.Run(macro_name(workbook, "ApplyAllConfigurations")))
-        timings["apply_all_configurations_seconds"] = time.perf_counter() - start
-        checks.append("ApplyAllConfigurations macro")
+        retry(
+            "legacy UpdateCalendarTabs wrapper",
+            lambda: excel.Run(macro_name(workbook, "UpdateCalendarTabs")),
+        )
 
         dashboard = workbook.Worksheets("Dashboard")
         email_ws = workbook.Worksheets("Email Campaigns")
@@ -567,6 +818,11 @@ def validate_extensively(path: Path) -> tuple[list[str], dict[str, float]]:
         email_seed = seed_campaign_rows(email_table, "Email", today)
         sms_seed = seed_campaign_rows(sms_table, "SMS", today)
         checks.append("seeded 10 Email and 10 SMS QA rows in temporary copy")
+
+        retry(
+            "ApplyTimedCampaignLinks",
+            lambda: excel.Run(macro_name(workbook, "ApplyTimedCampaignLinks")),
+        )
 
         start = time.perf_counter()
         retry("RefreshDashboard", lambda: excel.Run(macro_name(workbook, "RefreshDashboard")))
@@ -595,12 +851,26 @@ def validate_extensively(path: Path) -> tuple[list[str], dict[str, float]]:
         assert_stage_values(email_table, email_seed["all"], "Email", checks)
         assert_stage_values(sms_table, sms_seed["all"], "SMS", checks)
         assert_dashboard_rows(dashboard_table, email_seed, sms_seed, checks)
-        assert_calendar_rows(workbook, email_seed, sms_seed, today, checks)
+        assert_dashboard_kpis(
+            dashboard,
+            email_table,
+            sms_table,
+            today,
+            checks,
+        )
+        assert_retired_features(workbook, dashboard, checks)
         assert_filters(email_table, email_seed, today, checks)
         assert_filters(sms_table, sms_seed, today, checks)
-        assert_delivered_comparison(workbook, email_table, today, checks)
         assert_formats_and_ui(workbook, email_table, sms_table, checks)
         assert_links_and_hidden_helpers(workbook, dashboard, checks)
+        assert_timed_hyperlinks(
+            workbook,
+            email_table,
+            sms_table,
+            email_seed,
+            sms_seed,
+            checks,
+        )
         assert_no_formula_errors(workbook, checks)
 
         # Exercise the explicit checkbox toggle macro on one seeded Email and SMS row.
