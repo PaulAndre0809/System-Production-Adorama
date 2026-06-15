@@ -29,7 +29,8 @@ XL_ERRORS = 16
 EXPECTED_CAMPAIGN_TYPES = [
     "Promo",
     "Services",
-    "Loyalty & PLCC",
+    "Loyalty",
+    "PLCC",
     "Newsletters",
     "Events",
     "NPA",
@@ -189,7 +190,7 @@ def seed_campaign_rows(table, channel: str, today: dt.date) -> dict[str, list]:
         (2, ws + dt.timedelta(days=1), "Services", 1250, True, True, "current week completed"),
         (3, ws + dt.timedelta(days=3), "Custom QA Type", 0, False, True, "custom campaign type"),
         (4, ws + dt.timedelta(days=4), None, 0, True, False, "blank campaign type"),
-        (5, ws + dt.timedelta(days=8), "Loyalty & PLCC", 0, False, False, "next week open"),
+        (5, ws + dt.timedelta(days=8), "Loyalty", 0, False, False, "next week open"),
         (6, ws + dt.timedelta(days=12), "Events", 0, True, True, "next week open"),
         (7, ws - dt.timedelta(days=2), "Newsletters", 700, True, True, "last week delivered"),
         (8, previous_month + dt.timedelta(days=5), "NPA", 0, False, False, "previous month open"),
@@ -325,13 +326,13 @@ def assert_no_formula_errors(workbook, checks: list[str]) -> None:
 
 def assert_campaign_type_sources(workbook, email_table, sms_table, checks: list[str]) -> None:
     dropdowns = workbook.Worksheets("Dropdowns")
-    actual = [dropdowns.Cells(row, 1).Value for row in range(2, 10)]
+    actual = [dropdowns.Cells(row, 1).Value for row in range(2, 11)]
     if actual != EXPECTED_CAMPAIGN_TYPES:
         raise AssertionError(f"Campaign Type dropdown source mismatch: {actual}")
     for table in (email_table, sms_table):
         col = column_by_header(table, "Campaign Type")
         validation = col.DataBodyRange.Validation
-        if validation.Type != 3 or validation.Formula1 != "=Dropdowns!$A$2:$A$9":
+        if validation.Type != 3 or validation.Formula1 != "=Dropdowns!$A$2:$A$10":
             raise AssertionError(f"Campaign Type validation is wrong on {table.Name}")
         if validation.ShowError:
             raise AssertionError(f"Campaign Type custom values are blocked on {table.Name}")

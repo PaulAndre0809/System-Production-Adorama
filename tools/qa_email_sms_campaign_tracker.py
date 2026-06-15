@@ -23,7 +23,8 @@ import win32com.client as win32
 EXPECTED_CAMPAIGN_TYPES = [
     "Promo",
     "Services",
-    "Loyalty & PLCC",
+    "Loyalty",
+    "PLCC",
     "Newsletters",
     "Events",
     "NPA",
@@ -348,7 +349,7 @@ def validate_workbook(path: Path) -> list[str]:
         checks.append("no freeze panes or split views")
 
         dropdowns = workbook.Worksheets("Dropdowns")
-        actual_types = [dropdowns.Cells(row, 1).Value for row in range(2, 10)]
+        actual_types = [dropdowns.Cells(row, 1).Value for row in range(2, 11)]
         if actual_types != EXPECTED_CAMPAIGN_TYPES:
             raise AssertionError(f"Unexpected Campaign Type source list: {actual_types}")
         for table in (email_table, sms_table):
@@ -358,7 +359,7 @@ def validate_workbook(path: Path) -> list[str]:
             validation_obj = campaign_type_col.DataBodyRange.Validation
             if validation_obj.Type != 3:
                 raise AssertionError(f"Campaign Type is not a list validation on {table.Name}")
-            if validation_obj.Formula1 != "=Dropdowns!$A$2:$A$9":
+            if validation_obj.Formula1 != "=Dropdowns!$A$2:$A$10":
                 raise AssertionError(
                     f"Campaign Type source is wrong on {table.Name}: {validation_obj.Formula1}"
                 )

@@ -32,6 +32,8 @@ names are safe no-ops and must not recreate those features.
 ### `HandleCampaignChange`
 
 - Runs from the Email and SMS `Worksheet_Change` events in desktop Excel.
+- Prompts (via `PromptCustomCampaignType`/`InputBox`) for a custom value when a
+  `Campaign Type` cell is set to `Others`, writing the entry to that row only.
 - Restores `Send Date` and `Send Time` formatting after typing or pasting.
 - Converts supported pasted URLs to native timed hyperlinks.
 - Updates `Last Updated` and `Last Updated By`.
@@ -204,8 +206,12 @@ table does not absorb it.
   `Wednesday, June 10, 2026`.
 - `Send Time` accepts real Excel times and text such as `STO` or
   `Local Timezone`.
-- `Campaign Type` offers Promo, Services, Loyalty & PLCC, Newsletters, Events,
-  NPA, Others, and blank. Custom text is allowed but is not added to the list.
+- `Campaign Type` offers Promo, Services, Loyalty, PLCC, Newsletters, Events,
+  NPA, Others, and blank. `Loyalty` and `PLCC` are independent options (the former
+  combined `Loyalty & PLCC` option was split). In desktop Excel, selecting `Others`
+  opens a pop-up (`InputBox`) to type a custom campaign type that fills that row
+  only. Custom text is allowed but is not added to the dropdown list. The list
+  source is `CampaignTypeOptions()` in VBA, mirrored to `Dropdowns!A2:A10`.
 - `Owner` and `Notes` are plain text.
 - Workflow columns contain only Boolean checkbox values.
 - Do not rename tables, calculated columns, or headers.
