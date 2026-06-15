@@ -34,7 +34,7 @@ EXPECTED_CAMPAIGN_TYPES = [
 EXPECTED_LAST_REFRESH_FORMULA = '=TEXT(NOW(),"m/d/yyyy h:mm AM/PM")'
 EXPECTED_SEND_DATE_FORMAT = "dddd, mmmm d, yyyy"
 EXPECTED_SEND_TIME_FORMAT = "h:mm am/pm"
-NOTES_PASSWORD = "adorama2024"
+NOTES_PASSWORD = "Adorama@042026_"  # verified against the Notes sheet SHA-512 protection hash
 
 
 def retry(label, func, attempts=20, delay=0.75):
@@ -306,8 +306,12 @@ def validate_workbook(path: Path) -> list[str]:
             raise AssertionError("Notes do not document Dashboard cancellation filtering")
         checks.append("Calendar sheets and weekly Dashboard comparisons are retired")
 
-        if dashboard.Range("B3").Formula != EXPECTED_LAST_REFRESH_FORMULA:
-            raise AssertionError(f"Unexpected Last Refresh formula: {dashboard.Range('B3').Formula}")
+        # Read via retry: the preceding pure-Python checks give Excel idle time to
+        # start a volatile NOW()/TODAY() background recalc, which rejects bare COM
+        # reads ("call rejected by callee") on a busy machine.
+        last_refresh = retry("read Last Refresh formula", lambda: dashboard.Range("B3").Formula)
+        if last_refresh != EXPECTED_LAST_REFRESH_FORMULA:
+            raise AssertionError(f"Unexpected Last Refresh formula: {last_refresh}")
         if dashboard.Range("C3").Value != "Last Edited By":
             raise AssertionError("Dashboard Last Edited field was not removed")
         if dashboard.Range("D3").Formula == "":

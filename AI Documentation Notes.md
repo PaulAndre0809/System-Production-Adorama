@@ -133,6 +133,71 @@ when the workbook recalculates.
 - Web users must rely on SharePoint version history because workbook formulas
   cannot reliably retrieve the signed-in web editor.
 
+### Schedule-Gap Highlighting
+
+`Email Campaigns` and `SMS Campaigns` carry a native conditional-formatting rule
+that flags deployments due soon but not yet scheduled. An Email row fills orange
+(`#FFC000`) and an SMS row fills yellow (`#FFFF00`) when every condition holds:
+
+- `Campaign Name` is not blank.
+- `Scheduled` is not `TRUE` (Email column `O`, SMS column `K`).
+- `Send Date` falls inside the next working window.
+- `Notes` is not exactly `Cancelled` or `Canceled`.
+
+The window is `TODAY()+1` through `TODAY()+IF(WEEKDAY(TODAY(),1)=6,3,1)`, so most
+days highlight only the next day, while Fridays extend through Saturday, Sunday,
+and Monday. The whole-row rule is set to first priority and applies to
+`Email Campaigns!A2:W207` and `SMS Campaigns!A2:R201`. The Email formula is:
+
+```
+=AND($C2<>"",$O2<>TRUE,IFERROR(INT($A2),0)>=TODAY()+1,
+  IFERROR(INT($A2),0)<=TODAY()+IF(WEEKDAY(TODAY(),1)=6,3,1),
+  NOT(OR(LOWER(TRIM($W2))="cancelled",LOWER(TRIM($W2))="canceled")))
+```
+
+The SMS formula is identical except `$K2` replaces `$O2` and `$R2` replaces
+`$W2`. Because the rule is native conditional formatting driven by `TODAY()`, it
+recalculates daily and works in Excel for the web. It coexists with the existing
+Cancelled and Current Stage rules and survives `RefreshDashboard` and
+`RefreshNativeOutputs`. The `IFERROR(INT(...),0)` guard ignores text or blank
+`Send Time`/`Send Date` values, mirroring the Dashboard campaign-window formula.
+
+### Dashboard Week Number
+
+`Dashboard!M4:N6` is a KPI-style tile labeled `Week Number`, placed to the right
+of the `Sent` tile and styled to match it. The value cell `M5` holds:
+
+```
+=WEEKNUM(TODAY(),1)&"-"&WEEKNUM(TODAY()+7,1)
+```
+
+It shows the current two-week window as a span, for example `25-26` for the week
+of June 14, 2026. `WEEKNUM(..,1)` uses a Sunday-start week so the number matches
+the Sunday-through-next-Saturday Dashboard feed, and the second term reports the
+following week. The tile is display-only and persists across Dashboard refreshes.
+
+A per-campaign `Week Number` column sits beneath that tile at `Dashboard!M`,
+immediately right of the `DashboardWorkTable` `Bluecore/Attentive` column. It is a
+standalone sheet column (header `M10`, formula `M11:M160`), deliberately **not** a
+13th `DashboardWorkTable` column, because `ValidateWorkbookConfiguration` requires
+that table to keep exactly 12 columns. Each row shows a `Week N` label derived
+from the leading `MMDDYY` code in the `Campaign` value, e.g.
+`061726-STO-Services-Trade-P-B-NA-GLP` resolves to `Week 25`. When the campaign
+has no parseable code (such as `TBD`), it falls back to the row's `Send Date`;
+blank feed rows stay blank. The first-data-row formula is:
+
+```
+=LET(sendDate,$A11,camp,$D11&"",code,LEFT(camp,6),
+  parsed,IFERROR(DATE(2000+VALUE(MID(code,5,2)),VALUE(LEFT(code,2)),VALUE(MID(code,3,2))),""),
+  useDate,IF(parsed="",IF(ISNUMBER(sendDate),INT(sendDate),""),parsed),
+  IF(useDate="","","Week "&WEEKNUM(useDate,1)))
+```
+
+The column uses `WEEKNUM(..,1)` for the same Sunday-start week as the tile and
+survives `RefreshDashboard`/`RefreshNativeOutputs` (which leave columns outside the
+table untouched). Workbook auto-expand is left disabled when it is written so the
+table does not absorb it.
+
 ## Data Entry Rules
 
 - `Send Date` must be a real Excel date and displays like
@@ -148,7 +213,9 @@ when the workbook recalculates.
 ## Protection And Compatibility
 
 `Notes - Instructions` is protected against accidental edits. The maintenance
-password is `adorama2024`. Worksheet protection is not encryption.
+password is `Adorama@042026_` for the active tracker and template (verified
+against the sheet's stored SHA-512 protection hash). The older backup copy still
+opens with the legacy `adorama2024`. Worksheet protection is not encryption.
 
 Native formulas, tables, filters, saved formatting, and checkbox values work in
 Excel for the web. VBA compilation, edit events, automatic audit stamping, and
@@ -183,5 +250,7 @@ Each release is checked for:
 7. Exact seven-day hyperlink behavior before and after the maturity timestamp.
 8. Formula errors, broken names, freeze panes, and external workbook links.
 9. Instruction-sheet protection and password verification.
+10. Schedule-gap highlighting rules and the Dashboard Week Number tile survive a
+    Dashboard refresh, and the highlight rules add no formula errors.
 
 Temporary QA records are created only in disposable copies.

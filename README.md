@@ -93,6 +93,13 @@ Summary KPIs use expanding structured table references:
 - Approval Pending
 - Sent
 
+A `Week Number` tile beside the KPIs shows the current two-week window as a span
+(for example `25-26`), matching the Sunday-through-next-Saturday feed. Beneath it,
+a per-campaign `Week Number` column (next to `Bluecore/Attentive`) shows a
+`Week N` label for each row, derived from the leading `MMDDYY` code in the
+campaign string (e.g. `061726-STO-...` → `Week 25`) and falling back to the Send
+Date when there is no code.
+
 ## Timed Link Labels
 
 The `JIRA`, `ClickUp`, `Bluecore/Attentive`, and `Proof of Schedule` link
@@ -104,6 +111,17 @@ For `STO`, `Local Timezone`, or a blank Send Time, the seven-day period starts
 at midnight on the Send Date. Excel for the web updates the label when the
 workbook recalculates; desktop Excel also schedules the next due refresh while
 the workbook remains open.
+
+## Schedule-Gap Highlighting
+
+On the `Email Campaigns` and `SMS Campaigns` sheets, a row is highlighted when a
+deployment is due in the next working window but its `Scheduled` checkbox is still
+unchecked. Email rows fill orange and SMS rows fill yellow. The window is the next
+day, and on Fridays it extends through Saturday, Sunday, and Monday so weekend and
+Monday sends are flagged before everyone leaves. Cancelled rows are never
+highlighted, and checking the `Scheduled` box clears the highlight. The rule is
+native conditional formatting, so it updates with the date and works in desktop
+Excel and Excel for the web.
 
 ## Excel And SharePoint Compatibility
 
@@ -124,8 +142,9 @@ changes.
 
 ## Maintenance
 
-The `Notes - Instructions` worksheet password is `adorama2024`. Protection is
-an accidental-edit safeguard, not encryption.
+The `Notes - Instructions` worksheet password is `Adorama@042026_` for the active
+tracker and template; the legacy backup copy still opens with `adorama2024`.
+Protection is an accidental-edit safeguard, not encryption.
 
 Do not rename workbook tables or headers, expose or edit Dashboard helper
 columns `AA:AL`, add blank lines after VBA continuation characters, or convert
