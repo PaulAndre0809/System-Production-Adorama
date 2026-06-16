@@ -490,14 +490,7 @@ def assert_dashboard_kpis(
 
 
 def assert_retired_features(workbook, dashboard, checks: list[str]) -> None:
-    calendar_sheets = [
-        workbook.Worksheets(index).Name
-        for index in range(1, workbook.Worksheets.Count + 1)
-        if "calendar" in str(workbook.Worksheets(index).Name).lower()
-    ]
-    if calendar_sheets:
-        raise AssertionError(f"Retired Calendar sheets still exist: {calendar_sheets}")
-
+    # SharePoint-linked monthly Calendar sheets are an active feature (no longer retired).
     comparison_tables = [
         dashboard.ListObjects(index).Name
         for index in range(1, dashboard.ListObjects.Count + 1)
@@ -530,8 +523,8 @@ def assert_retired_features(workbook, dashboard, checks: list[str]) -> None:
     notes_text = sheet_text(notes)
     if notes.Range("A1").Value != "Detailed Notes and Instructions":
         raise AssertionError("Notes - Instructions title is outdated")
-    if "intentionally removed" not in notes_text:
-        raise AssertionError("Notes do not document the retired features")
+    if "Monthly Calendars" not in notes_text:
+        raise AssertionError("Notes do not document the SharePoint monthly calendars")
     if "Wednesday, June 10, 2026" not in notes_text:
         raise AssertionError("Notes do not document the Send Date format")
     if "STO or Local Timezone" not in notes_text:
@@ -540,7 +533,7 @@ def assert_retired_features(workbook, dashboard, checks: list[str]) -> None:
         raise AssertionError("Notes do not document timed link labels")
     if "Cancelled Campaigns" not in notes_text:
         raise AssertionError("Notes do not document cancellation filtering")
-    checks.append("Calendar sheets and weekly Dashboard comparisons remain retired")
+    checks.append("SharePoint monthly calendars documented; weekly Dashboard comparisons retired")
 
 
 def assert_filters(table, seed, today: dt.date, checks: list[str]) -> None:
@@ -627,9 +620,15 @@ def assert_formats_and_ui(workbook, email_table, sms_table, checks: list[str]) -
 
 
 def assert_links_and_hidden_helpers(workbook, dashboard, checks: list[str]) -> None:
+    # SharePoint-linked monthly calendars are an active feature, so http(s)/SharePoint
+    # links are allowed; only local or file:// links break portability.
     links = retry("external links", lambda: workbook.LinkSources(1))
-    if links is not None:
-        raise AssertionError(f"External workbook links detected: {links}")
+    non_sharepoint = [
+        link for link in (links or [])
+        if not str(link).lower().startswith("http")
+    ]
+    if non_sharepoint:
+        raise AssertionError(f"Non-SharePoint external workbook links detected: {non_sharepoint}")
     if not dashboard.Columns("AA:AL").Hidden:
         raise AssertionError("Dashboard helper columns AA:AL should be hidden")
     dashboard_formula = str(dashboard.Range("AA11").Formula2)
@@ -638,7 +637,7 @@ def assert_links_and_hidden_helpers(workbook, dashboard, checks: list[str]) -> N
     lowered_formula = dashboard_formula.lower()
     if "cancelled" not in lowered_formula or "[current stage]" not in lowered_formula:
         raise AssertionError("Dashboard native helper does not exclude cancelled rows")
-    checks.append("hidden Dashboard helpers and no external workbook links")
+    checks.append("hidden Dashboard helpers; external links are SharePoint calendar sources only")
 
 
 def assert_timed_hyperlinks(

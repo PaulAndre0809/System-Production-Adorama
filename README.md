@@ -22,11 +22,18 @@ in each `.xlsm` file. Scripts in `tools/` are development and QA utilities only.
 | `Email Campaigns` | Email campaign source table and eight workflow checkboxes |
 | `SMS Campaigns` | SMS campaign source table and four workflow checkboxes |
 | `Notes - Instructions` | Protected user and maintenance guide |
+| `June 2026 Calendar` | Monthly calendar mirrored from the SharePoint planning file |
+| `May 2026 Calendar` | Hidden monthly calendar mirrored from SharePoint (active tracker only) |
+| `Template for Duplicate` | Pre-formatted calendar used to create a new month |
 | `Dropdowns` | Hidden Campaign Type validation source |
 | `Automation Log` | Hidden desktop automation and error log |
 
-Monthly Calendar sheets and Last Week versus Current Week delivery comparisons
-have been retired.
+The monthly Calendar sheets mirror the team's SharePoint Email/SMS planning
+workbooks through external links. To add a month, copy `Template for Duplicate`,
+rename it `<Month> 2026 Calendar`, and re-point its source via **Data > Edit
+Links**. The Template and Backup copies ship with `June 2026 Calendar` +
+`Template for Duplicate` as a guided example. The Last Week versus Current Week
+delivery comparisons remain retired.
 
 ## Campaign Fields
 
@@ -122,6 +129,11 @@ Monday sends are flagged before everyone leaves. Cancelled rows are never
 highlighted, and checking the `Scheduled` box clears the highlight. The rule is
 native conditional formatting, so it updates with the date and works in desktop
 Excel and Excel for the web.
+
+The same highlighting also appears on the **Dashboard** feed. Because the
+Dashboard has no `Scheduled` column, a feed row is treated as unscheduled when
+its `Stage` is not yet `Scheduled` or `Sent`; Email rows fill orange and SMS rows
+fill yellow over the same next-day/Friday-weekend window.
 
 ## Excel And SharePoint Compatibility
 

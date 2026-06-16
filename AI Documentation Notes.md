@@ -2,23 +2,30 @@
 
 ## Current System
 
-The three `Email & SMS Campaign Tracker` workbooks are self-contained `.xlsm`
-files. Runtime behavior does not depend on Python, PowerShell, BAS, or other
-external files. Development scripts under `tools/` are used only to build and
-test releases.
+The three `Email & SMS Campaign Tracker` workbooks are `.xlsm` files. Their
+campaign tracking, Dashboard, and VBA do not depend on Python, PowerShell, BAS,
+or other external files; development scripts under `tools/` are used only to
+build and test releases. The monthly Calendar sheets are the one exception: they
+mirror the team's SharePoint planning files through external workbook links (see
+*Monthly Calendars* below).
 
 The current workbook architecture uses two source tables:
 
 - `EmailCampaignsTable` on `Email Campaigns`
 - `SMSCampaignsTable` on `SMS Campaigns`
 
-The remaining user-facing sheets are `Dashboard` and
-`Notes - Instructions`. `Dropdowns` and `Automation Log` are hidden support
-sheets.
+The remaining user-facing sheets are `Dashboard`, `Notes - Instructions`, the
+SharePoint-linked monthly calendars (`June 2026 Calendar`, hidden
+`May 2026 Calendar`), and `Template for Duplicate`. `Dropdowns` and
+`Automation Log` are hidden support sheets.
 
-Monthly Calendar sheets and the former Last Week versus Current Week delivery
-comparisons were intentionally retired. Compatibility macros with old calendar
-names are safe no-ops and must not recreate those features.
+The former Last Week versus Current Week delivery comparisons remain retired (do
+not recreate `DeliveredComparison` objects). The monthly Calendar sheets are no
+longer retired — they are an active feature that mirrors SharePoint planning
+files. The legacy VBA calendar routines (`RebuildMonthlyCalendars`,
+`RemoveLegacyCalendarAndComparisonArtifacts`) are unused and must not be run:
+they build or delete differently-named sheets and would not respect the
+SharePoint mirror.
 
 ## Active VBA Entry Points
 
@@ -81,12 +88,13 @@ These formulas use full structured references. Row-scoped references such as
 - Recalculates timed source-link labels.
 - Calculates the hidden native spill formula at `Dashboard!AA11`.
 - Recalculates `DashboardWorkTable`, KPI cells, and audit display cells.
-- Does not rebuild source tables or removed Calendar sheets.
+- Does not rebuild source tables or the SharePoint-linked Calendar sheets.
 
 ### `ValidateWorkbookConfiguration`
 
 Performs lightweight embedded validation of core sheets, table structure,
-retired-feature removal, and instruction-sheet availability. External QA adds
+retired-comparison removal, and instruction-sheet availability. It no longer
+flags monthly Calendar sheets. External QA adds
 VBA compilation, seeded editing scenarios, formula verification, and package
 integrity checks.
 
@@ -163,6 +171,43 @@ recalculates daily and works in Excel for the web. It coexists with the existing
 Cancelled and Current Stage rules and survives `RefreshDashboard` and
 `RefreshNativeOutputs`. The `IFERROR(INT(...),0)` guard ignores text or blank
 `Send Time`/`Send Date` values, mirroring the Dashboard campaign-window formula.
+
+The same highlighting is also applied to the **Dashboard** feed
+(`DashboardWorkTable`, range `A11:L160`). Because the Dashboard feed has no
+`Scheduled` column, "unscheduled" there is derived from the `Stage` column: a
+feed row fills orange (Email) or yellow (SMS) when its `Send Date` is in the
+same next-day/Friday-weekend window and its `Stage` is not yet `Scheduled` or
+`Sent` (cancelled rows excluded). The Email rule is:
+
+```
+=AND($C11="Email",IFERROR(INT($A11),0)>=TODAY()+1,
+  IFERROR(INT($A11),0)<=TODAY()+IF(WEEKDAY(TODAY(),1)=6,3,1),
+  $F11<>"Scheduled",$F11<>"Sent",LEFT($D11,9)<>"CANCELLED")
+```
+
+The SMS rule uses `$C11="SMS"`. These rules are added below the existing
+per-column Dashboard rules, so Approval/Segments/Stage indicators stay readable,
+and they survive `RefreshDashboard`.
+
+### Monthly Calendars
+
+`June 2026 Calendar` (visible) and `May 2026 Calendar` (hidden) mirror the team's
+SharePoint Email and SMS planning workbooks through external-link formulas such
+as `='[3]2026 June Email Calendar'!$B$15`; there is no manual data entry. The
+external links resolve to `adorama.sharepoint.com/.../EMAIL PLANNING/...` and
+`/SMS Planning/...` paths and refresh in desktop Excel for a user with SharePoint
+access (the QA harness allows `http(s)`/SharePoint links and disallows only local
+`file://` links).
+
+`Template for Duplicate` is a pre-formatted month used to add new calendars: copy
+it, rename the copy to `<Month> 2026 Calendar`, then use **Data > Edit Links >
+Change Source** to point it at that month's SharePoint Email and SMS files, and
+update. Keep the calendar layout unchanged. The Template and Backup workbooks
+include `June 2026 Calendar` and `Template for Duplicate` as a guided example;
+the active tracker additionally keeps the hidden `May 2026 Calendar`.
+
+`ValidateWorkbookConfiguration` no longer flags Calendar sheets (the retired-
+calendar check was removed); it still rejects `DeliveredComparison` objects.
 
 ### Dashboard Week Number
 
@@ -241,7 +286,9 @@ and QA rejects any recurrence.
 - Keep helper columns `AA:AL` hidden and intact.
 - Avoid volatile formulas except the intentional `TODAY()` and `NOW()` audit
   and scheduling calculations.
-- Do not run retired migration or calendar rebuild routines.
+- Do not run the legacy migration or calendar-rebuild routines
+  (`RebuildMonthlyCalendars`); the monthly calendars are SharePoint-linked, not
+  VBA-built.
 
 ## QA Release Process
 
@@ -254,7 +301,8 @@ Each release is checked for:
 5. Checkbox, Current Stage, validation, filtering, date, time, and audit logic.
 6. Dashboard date window, friendly statuses, cancellation exclusion, and KPIs.
 7. Exact seven-day hyperlink behavior before and after the maturity timestamp.
-8. Formula errors, broken names, freeze panes, and external workbook links.
+8. Formula errors, broken names, freeze panes, and non-SharePoint external
+   workbook links (SharePoint calendar links are allowed).
 9. Instruction-sheet protection and password verification.
 10. Schedule-gap highlighting rules and the Dashboard Week Number tile survive a
     Dashboard refresh, and the highlight rules add no formula errors.

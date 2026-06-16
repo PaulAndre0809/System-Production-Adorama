@@ -35,7 +35,7 @@ EXPECTED_CAMPAIGN_TYPES = [
 EXPECTED_LAST_REFRESH_FORMULA = '=TEXT(NOW(),"m/d/yyyy h:mm AM/PM")'
 EXPECTED_SEND_DATE_FORMAT = "dddd, mmmm d, yyyy"
 EXPECTED_SEND_TIME_FORMAT = "h:mm am/pm"
-NOTES_PASSWORD = "Adorama@042026_"  # verified against the Notes sheet SHA-512 protection hash
+NOTES_PASSWORDS = ["Adorama@042026_", "adorama2024"]  # active/template use the first; the legacy backup uses the second
 
 
 def retry(label, func, attempts=20, delay=0.75):
@@ -258,13 +258,7 @@ def validate_workbook(path: Path) -> list[str]:
         )
         dashboard_table = dashboard.ListObjects("DashboardWorkTable")
 
-        calendar_sheets = [
-            workbook.Worksheets(index).Name
-            for index in range(1, workbook.Worksheets.Count + 1)
-            if "calendar" in str(workbook.Worksheets(index).Name).lower()
-        ]
-        if calendar_sheets:
-            raise AssertionError(f"Retired Calendar sheets still exist: {calendar_sheets}")
+        # SharePoint-linked monthly Calendar sheets are an active feature (no longer retired).
         comparison_tables = [
             dashboard.ListObjects(index).Name
             for index in range(1, dashboard.ListObjects.Count + 1)
@@ -295,8 +289,8 @@ def validate_workbook(path: Path) -> list[str]:
         if notes.Range("A1").Value != "Detailed Notes and Instructions":
             raise AssertionError("Notes - Instructions title is outdated")
         notes_text = str(notes.UsedRange.Value)
-        if "intentionally removed" not in notes_text:
-            raise AssertionError("Notes do not document the retired features")
+        if "Monthly Calendars" not in notes_text:
+            raise AssertionError("Notes do not document the SharePoint monthly calendars")
         if "Wednesday, June 10, 2026" not in notes_text:
             raise AssertionError("Notes do not document the Send Date format")
         if "STO or Local Timezone" not in notes_text:
@@ -305,7 +299,7 @@ def validate_workbook(path: Path) -> list[str]:
             raise AssertionError("Notes do not document seven-day link labels")
         if "Cancelled Campaigns" not in notes_text:
             raise AssertionError("Notes do not document Dashboard cancellation filtering")
-        checks.append("Calendar sheets and weekly Dashboard comparisons are retired")
+        checks.append("SharePoint monthly calendars documented; weekly Dashboard comparisons retired")
 
         # Read via retry: the preceding pure-Python checks give Excel idle time to
         # start a volatile NOW()/TODAY() background recalc, which rejects bare COM
@@ -414,11 +408,18 @@ def validate_workbook(path: Path) -> list[str]:
             date_cell.Value2 = old_date
             time_cell.Value2 = old_time
 
-        notes.Unprotect(Password=NOTES_PASSWORD)
-        if notes.ProtectContents:
+        notes_password = None
+        for candidate in NOTES_PASSWORDS:
+            try:
+                notes.Unprotect(Password=candidate)
+                notes_password = candidate
+                break
+            except pywintypes.com_error:
+                continue
+        if notes_password is None or notes.ProtectContents:
             raise AssertionError("Notes password did not unlock the sheet")
         notes.Protect(
-            Password=NOTES_PASSWORD,
+            Password=notes_password,
             UserInterfaceOnly=True,
             AllowFiltering=True,
         )
@@ -522,10 +523,16 @@ def validate_workbook(path: Path) -> list[str]:
                     )
         checks.append("supported link columns use native seven-day hyperlink formulas")
 
+        # SharePoint-linked monthly calendars are an active feature, so http(s)/SharePoint
+        # links are allowed; only local or file:// links are disallowed (they break portability).
         links = retry("external links", lambda: workbook.LinkSources(1))
-        if links is not None:
-            raise AssertionError(f"External workbook links detected: {links}")
-        checks.append("no external workbook links")
+        non_sharepoint = [
+            link for link in (links or [])
+            if not str(link).lower().startswith("http")
+        ]
+        if non_sharepoint:
+            raise AssertionError(f"Non-SharePoint external workbook links detected: {non_sharepoint}")
+        checks.append("external links are SharePoint calendar sources only")
 
         workbook.Close(SaveChanges=False)
     finally:
