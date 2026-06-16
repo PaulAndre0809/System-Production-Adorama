@@ -21,7 +21,7 @@ in each `.xlsm` file. Scripts in `tools/` are development and QA utilities only.
 | `Dashboard` | Current Sunday through next Saturday campaign view and summary KPIs |
 | `Email Campaigns` | Email campaign source table and eight workflow checkboxes |
 | `SMS Campaigns` | SMS campaign source table and four workflow checkboxes |
-| `Notes - Instructions` | Protected user and maintenance guide |
+| `Notes - Instructions` | Plain-language, end-user guide to every feature (protected) |
 | `June 2026 Calendar` | Monthly calendar mirrored from the SharePoint planning file |
 | `May 2026 Calendar` | Hidden monthly calendar mirrored from SharePoint (active tracker only) |
 | `Template for Duplicate` | Pre-formatted calendar used to create a new month |
@@ -153,6 +153,11 @@ Use SharePoint version history as the authoritative editor record for web
 changes.
 
 ## Maintenance
+
+The `Notes - Instructions` sheet inside each workbook is the **end-user guide**:
+plain, non-technical wording (a *Feature / What you do / How it works / Please do /
+Please avoid / Where it works* table) covering only features still in use. This
+README and `AI Documentation Notes.md` are the technical/maintainer references.
 
 The `Notes - Instructions` worksheet password is `Adorama@042026_` for the active
 tracker and template; the legacy backup copy still opens with `adorama2024`.

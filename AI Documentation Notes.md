@@ -263,6 +263,15 @@ table does not absorb it.
 
 ## Protection And Compatibility
 
+`Notes - Instructions` is the in-workbook user guide. It is written in plain,
+non-technical end-user language — a five-column table (*Feature*, *What you do*,
+*How it works (in plain words)*, *Please do / Please avoid*, *Where it works*) —
+and documents only features that are still in use; the title cell stays
+`Detailed Notes and Instructions`. The same content is kept in sync across the
+three workbooks. The embedded Notes-builder routines (`AddInstructionRow`) still
+hold the older, more technical wording, so a full Notes rebuild would overwrite
+the plain-language text — that rebuild is not part of normal use.
+
 `Notes - Instructions` is protected against accidental edits. The maintenance
 password is `Adorama@042026_` for the active tracker and template (verified
 against the sheet's stored SHA-512 protection hash). The older backup copy still
