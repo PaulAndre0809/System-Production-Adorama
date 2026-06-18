@@ -245,6 +245,26 @@ survives `RefreshDashboard`/`RefreshNativeOutputs` (which leave columns outside 
 table untouched). Workbook auto-expand is left disabled when it is written so the
 table does not absorb it.
 
+### Campaign Sheet Week Number Column
+
+The `Email Campaigns` and `SMS Campaigns` tables each carry a `Week Number`
+calculated column inserted as the **first** table column (column `A`), immediately
+left of `Send Date` (which moves to column `B`). Unlike the Dashboard column, it
+derives the week purely from the row's own `Send Date`:
+
+```
+=IF(ISNUMBER([@[Send Date]]),"Week "&WEEKNUM([@[Send Date]],1),"")
+```
+
+It shows a `Week N` label (Sunday-start `WEEKNUM(..,1)`) so campaigns can be grouped
+and filtered by week for historical review; empty rows stay blank. Inserting the
+column shifts the other columns right, and Excel automatically re-points the
+existing conditional formatting (schedule-gap, Current Stage, Cancelled) and the
+Dashboard's structured-reference formulas. VBA and QA both resolve campaign columns
+by header name, so no further edits are needed and `ValidateWorkbookConfiguration`
+stays `OK`. (Note: the legacy backup copy's campaign tables predate the `Scheduled`
+column and therefore have one fewer column than the active tracker and template.)
+
 ## Data Entry Rules
 
 - `Send Date` must be a real Excel date and displays like

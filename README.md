@@ -39,6 +39,8 @@ delivery comparisons remain retired.
 
 Both campaign tables contain:
 
+- `Week Number` (first column, left of `Send Date`; a `Week N` label worked out
+  from the row's `Send Date` so campaigns can be grouped and filtered by week)
 - `Send Date`
 - `Send Time`
 - `Campaign Name`
