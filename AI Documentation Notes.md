@@ -27,6 +27,81 @@ files. The legacy VBA calendar routines (`RebuildMonthlyCalendars`,
 they build or delete differently-named sheets and would not respect the
 SharePoint mirror.
 
+## Repository Layout and Source of Truth
+
+**Purpose:** Define which files are authoritative and which are disposable
+artifacts, so future agents do not edit or trust the wrong copy.
+
+| Path | Role | Authoritative? |
+| --- | --- | --- |
+| `Production Tracker/*.xlsm` | Active tracker, Template, and legacy Backup workbooks. Embed all runtime formulas, formatting, validation, checkbox state, and the live VBA project. | **Yes** — the workbooks are the product. |
+| `Project Tracker/Loyalty and PLCC Email Plan Template.xlsx` | Standalone planning template (no macros). | Yes (self-contained). |
+| `tools/*.py` | Development, build, patch, and QA utilities. Not loaded at runtime. | Yes, as the build pipeline. |
+| `vba_dump.txt`, `clean_temp*.vba`, `clean_mod.vba`, `clean.vba`, `notes_dump.txt`, `tools/vba_dump.txt` | Point-in-time VBA/text **exports** captured during development. | **No** — historical snapshots only. |
+| `Reporting Analysis/` | Reserved/empty working area. | n/a |
+
+**Critical insight (verified by static analysis):** the loose VBA dumps are
+**stale**. The root `vba_dump.txt` is the standard module only and `tools/vba_dump.txt`
+adds the sheet/workbook event modules, but **neither** contains the
+`ApplyCampaignEntryFormats`, `ApplyDashboardKpiFormulas`, or
+`PromptCustomCampaignType` procedures. Those procedures exist in the **live
+workbook**, injected by `tools/fix_campaign_entry_formats.py` and
+`tools/split_campaign_type_and_others_prompt.py` after the dumps were taken. To
+read the current VBA, export it from the `.xlsm` (`tools/export_vba.py`) rather
+than reading the loose dumps.
+
+## VBA Module Map
+
+The live VBA project is organized as event modules that delegate to a single
+standard module (`modEmailProductionTracker`).
+
+### Event modules (thin delegators)
+
+| Module | Handler | Delegates to |
+| --- | --- | --- |
+| `ThisWorkbook` | `Workbook_Open` | Startup repair (unfreeze, restore formats, repair/recalc Dashboard) |
+| `Email Campaigns` sheet | `Worksheet_Change` | `HandleInventoryChange` → `HandleCampaignChange` |
+| `Email Campaigns` sheet | `Worksheet_BeforeDoubleClick` | `ToggleInventoryChecklist` (legacy checkbox fallback) |
+| `SMS Campaigns` sheet | `Worksheet_Change` | `HandleCampaignChange` |
+| `SMS Campaigns` sheet | `Worksheet_BeforeDoubleClick` | `ToggleInventoryChecklist` |
+
+Excel for the web never fires these events; SharePoint version history is the
+authoritative web editor record.
+
+### `modEmailProductionTracker` — core procedure catalog
+
+Signatures use the live VBA. Procedures marked *(injected)* are added to the
+workbook by `tools/` scripts and are absent from the loose dumps.
+
+| Procedure | Signature → Return | Purpose |
+| --- | --- | --- |
+| `GenerateCampaignID` | `(sendDate As Variant, campaignName As String) As String` | Build a stable campaign source code from date + cleaned name. |
+| `CalculateCurrentStage` | `(ws As Worksheet, r As Long) As String` | Compose the `Current Stage` text listing every checked workflow field. |
+| `CalculateRiskLevel` | `(ws As Worksheet, r As Long) As String` | Derive a risk label from send date proximity and checklist completion. |
+| `ToggleInventoryChecklist` | `(Target As Range) As Boolean` | Flip a workflow cell TRUE/FALSE; native checkbox first, legacy fallback otherwise. |
+| `HandleCampaignChange` | `(ws As Worksheet, Target As Range)` | Master `Worksheet_Change` handler: Others prompt, format repair, URL→hyperlink, audit stamp, stage recalc, batched Dashboard refresh, error logging. |
+| `PromptCustomCampaignType` *(injected)* | `(lo As ListObject, changedCells As Range)` | `InputBox` prompt when `Campaign Type` = `Others`; writes the custom value to that row only. |
+| `UpdateRowTimestampAndUser` | `(rowNumber As Long, lo As ListObject)` | Stamp `Last Updated` / `Last Updated By` for an edited row. |
+| `ApplyCampaignEntryFormats` *(injected)* | `()` | Apply long-date / 12-hour formats and remove blocking `Send Time` validation. |
+| `ApplyDashboardKpiFormulas` *(injected)* | `()` | Repair the six KPI cells with expanding structured-reference formulas. |
+| `RefreshDashboard` | `()` | Repair KPI formulas, recalc timed link labels, the `AA11` spill, the work table, and audit cells. |
+| `RefreshNativeOutputs` | `()` | Recalculate native spill/feed outputs without rebuilding source tables. |
+| `ValidateWorkbookConfiguration` | `() As String` | Embedded self-check; returns `"OK"` or a failure description (the QA gate's first assertion). |
+| `InventoryColumnNumber` | `(headerName As String) As Long` | Resolve a campaign column index by header name (VBA never hard-codes column letters). |
+| `LogAction` | `(actionName As String, details As String)` | Append a row to the hidden `Automation Log`. |
+| `CreateDailyDigest` | `()` | Build the daily digest summary. |
+| `UnfreezeWorkbookViews` | `(wb As Workbook)` | Remove freeze panes / split views (called on open). |
+
+**Build/config procedures (run only during release assembly, never at runtime):**
+`MigrateProductionInventoryStructure`, `ApplyAllConfigurations`,
+`RefreshProductionStatus`, `UpdateCalendarTabs`, `CreateBackupCopy`,
+`BuildNotesInstructionSheet` (+ `AddInstructionRow`), and the styling helpers.
+
+**Do-not-run legacy procedures:** `RebuildMonthlyCalendars`,
+`RemoveLegacyCalendarAndComparisonArtifacts`, `CreateDeliveredComparison`,
+`CreateDeliveredComparisonChart` — they build/delete differently-named sheets and
+ignore the SharePoint calendar mirror.
+
 ## Active VBA Entry Points
 
 ### `Workbook_Open`
@@ -319,9 +394,46 @@ and QA rejects any recurrence.
   (`RebuildMonthlyCalendars`); the monthly calendars are SharePoint-linked, not
   VBA-built.
 
+## Development and QA Tooling (`tools/`)
+
+**Dependencies:** all scripts run on Python 3.14 in `.venv` and drive desktop
+Excel through `win32com` (`pywin32`) COM automation, except the offline static
+gate. Excel for the web cannot run them. None are required at workbook runtime.
+
+### QA harnesses
+
+| Script | Purpose | Behavior |
+| --- | --- | --- |
+| `qa_email_sms_campaign_tracker.py` | Primary non-destructive QA gate. | Copies the workbook to a temp file, opens it via COM, asserts VBA-continuation integrity, runs `ValidateWorkbookConfiguration`, then verifies KPI formulas, retired-comparison absence, audit fields, dropdowns, date/time display, timed hyperlinks, Notes password, and SharePoint-only external links. Prints `QA PASSED` + checklist. Default target: the active tracker. |
+| `extensive_qa_email_sms_campaign_tracker.py` | Heavy scenario QA. | Seeds 10 Email + 10 SMS temporary campaigns in a disposable copy, exercises embedded VBA and native formulas end to end, then discards the copy. |
+| `compile_vba_probe.py` | VBA project compile + modal-error detection. | Opens the workbook and forces a VBA compile, surfacing compiler dialogs as failures. |
+| `inspect_workbook.py`, `quick_check.py`, `quick_test*.py` | Read-only spot checks. | Print sheet/table/formula state for manual inspection. |
+
+An **offline static gate** (no Excel required) can pre-screen before the COM
+harness: it un-doubles the double-spaced VBA exports and applies the same
+blank-after-`_` continuation rule, and `py_compile`s every `tools/*.py`. Note the
+loose dumps are snapshots, so this gate validates the exports' syntax, not the
+live workbook — the COM harness above remains the authoritative release gate.
+
+### Build, patch, and content scripts
+
+| Script | Purpose |
+| --- | --- |
+| `build_clean_tracker.py`, `apply_modifications.py`, `sanitize_vba.py` | Assemble a clean workbook, apply structural modifications, and strip invalid VBA continuation gaps. |
+| `export_vba.py` | Export the **current** VBA from the `.xlsm` (use this, not the stale dumps). |
+| `fix_campaign_entry_formats.py` | Inject `ApplyCampaignEntryFormats` / `ApplyDashboardKpiFormulas` and resilient date/time behavior. |
+| `split_campaign_type_and_others_prompt.py` | Split `Loyalty & PLCC` into independent options and inject `PromptCustomCampaignType`. |
+| `add_week_number_source_column.py`, `add_dashboard_week_column.py` | Add the campaign-table and Dashboard `Week Number` columns. |
+| `apply_schedule_highlight_and_weeknum.py`, `integrate_calendars_and_dashboard_highlight.py` | Add schedule-gap conditional formatting, the Week Number tile, and the SharePoint calendar integration. |
+| `sync_calendars_to_template_backup.py`, `fix_backup_scheduled_column.py` | Propagate calendar examples to Template/Backup and bring the legacy backup's tables up to the current column set. |
+| `rewrite_notes_for_end_users.py`, `update_instructions.py`, `remove_retired_notes_references.py` | Maintain the plain-language `Notes - Instructions` sheet. |
+| `retire_calendar_comparisons.py` | One-time removal of the retired weekly delivery comparison blocks. |
+
 ## QA Release Process
 
-Each release is checked for:
+A fast offline pre-check (un-doubled VBA continuation scan + `py_compile` of
+`tools/`) can run first, but the authoritative gate is the COM harness. Each
+release is checked for:
 
 1. XLSM package and embedded VBA integrity.
 2. VBA continuation syntax and full VBA project compilation.
