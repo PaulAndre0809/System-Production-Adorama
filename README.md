@@ -121,6 +121,11 @@ at midnight on the Send Date. Excel for the web updates the label when the
 workbook recalculates; desktop Excel also schedules the next due refresh while
 the workbook remains open.
 
+Very long links (over 255 characters, such as some Bluecore/Attentive
+`compose/design` URLs) are stored as a real clickable hyperlink showing the
+platform name instead of the timed formula — Excel cannot hold a URL that long
+inside a formula without returning `#VALUE!`.
+
 ## Schedule-Gap Highlighting
 
 On the `Email Campaigns` and `SMS Campaigns` sheets, a row is highlighted when a

@@ -210,6 +210,14 @@ blank Send Time values use midnight on Send Date. Desktop Excel schedules an
 open. Excel for the web cannot run VBA, but the native `NOW()` formula updates
 when the workbook recalculates.
 
+**Long URLs:** a string literal longer than 255 characters cannot live inside a
+formula — Excel stores it via `_xlfn._LONGTEXT(...)`, which evaluates to
+`#VALUE!`. So when a link URL exceeds 255 characters (e.g. some
+Bluecore/Attentive `compose/design?...` URLs), `InstallTimedCampaignLink` skips
+the timed formula and instead writes a real Excel hyperlink (its address has no
+255-char limit) showing the clean platform name. Normal-length links keep the
+live timed formula; long links stay clickable with no error.
+
 ### Audit Display
 
 - `Last Refresh` is formula-driven and uses 12-hour time.
