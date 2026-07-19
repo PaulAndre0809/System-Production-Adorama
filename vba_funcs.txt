@@ -1,0 +1,130 @@
+Private Sub Workbook_Open()
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean)
+Private Sub Worksheet_Change(ByVal Target As Range)
+Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean)
+Private Sub Worksheet_Change(ByVal Target As Range)
+Private Sub FormatHyperlinksInChangedCells( _
+Public Sub MigrateProductionInventoryStructure()
+Public Sub RefreshProductionStatus()
+Public Sub ApplyAllConfigurations()
+Public Function GenerateCampaignID( _
+Public Function CalculateCurrentStage( _
+Private Function CheckedChecklistItemsForRow( _
+Public Function CalculateRiskLevel( _
+Public Sub ApplyDashboardKpiFormulas()
+Public Sub ApplyTimedCampaignLinks()
+Private Sub ApplyTimedLinksToTable( _
+Private Function CampaignLinkDisplayName( _
+Private Function CampaignLinkAddress(ByVal cell As Range) As String
+Private Sub InstallTimedCampaignLink( _
+Private Sub InstallLongCampaignLink( _
+Private Function TimedCampaignLinkFormula( _
+Public Sub RefreshTimedCampaignLinks()
+Private Sub CalculateTimedCampaignLinkColumns()
+Public Sub ScheduleNextCampaignLinkRefresh()
+Public Sub CancelCampaignLinkRefresh()
+Private Function NextCampaignLinkMaturity() As Date
+Private Function NextTableLinkMaturity( _
+Private Function CampaignLinkMaturity( _
+Public Sub RefreshDashboard()
+Public Sub RefreshNativeOutputs()
+Private Sub ApplyDashboardAuditHeader(ByVal ws As Worksheet)
+Private Function DashboardLastEditedByFormula() As String
+Private Sub ApplyDashboardNativeFormulas( _
+Private Sub ApplyFormulaCompat( _
+Private Function DashboardNativeLinkFormula( _
+Private Function DashboardNativeSpillFormula() As String
+Private Function DashboardNativeBlankRowFormula() As String
+Private Function CountDashboardMatches( _
+Private Sub AppendDashboardRows( _
+Private Function ApprovalDashboardStatus(ByVal statusValue As Variant) As String
+Private Function SegmentsDashboardStatus(ByVal statusValue As Variant) As String
+Public Sub RemoveLegacyCalendarAndComparisonArtifacts(ByVal wb As Workbook)
+Private Sub RemoveLegacyDashboardComparisons(ByVal ws As Worksheet)
+Private Function IsLegacyCalendarSheetName(ByVal sheetName As String) As Boolean
+Private Sub CreateDeliveredComparison( _
+Private Sub CreateDeliveredComparisonChart( _
+Private Sub StyleDashboard( _
+Private Sub ApplyDashboardStatusFormatting(ByVal dashboardTable As ListObject)
+Private Sub AddDashboardLink( _
+Public Sub CreateDailyDigest()
+Public Sub LogAction(ByVal actionName As String, ByVal details As String)
+Public Function InventoryColumnNumber(ByVal headerName As String) As Long
+Private Sub AddChecklistColumns( _
+Private Sub ConfigureChecklistColumn( _
+Private Function ApplyNativeCheckboxControl(ByVal rng As Range) As Boolean
+Private Function CheckboxControlType(ByVal rng As Range) As Long
+Private Sub ApplyLegacyCheckboxDisplay(ByVal rng As Range)
+Private Sub SetChecklistValue(ByVal targetCell As Range, ByVal isComplete As Boolean)
+Private Function LegacyCheckboxNumberFormat() As String
+Private Sub EnsureNotesColumn(ByVal lo As ListObject)
+Private Sub ConfigureOwnerColumn(ByVal lo As ListObject)
+Private Sub ConfigureCampaignTypeColumn(ByVal lo As ListObject)
+Private Sub ConfigureSmsCampaignTypeColumn(ByVal lo As ListObject)
+Private Function CampaignTypeOptions() As Variant
+Private Function CampaignTypeOptionsRange() As Range
+Private Sub EnsureUpdatedByColumn(ByVal lo As ListObject)
+Public Sub HandleInventorySelection(ByVal Target As Range)
+Public Function ToggleInventoryChecklist(ByVal Target As Range) As Boolean
+Public Sub HandleInventoryChange(ByVal Target As Range)
+Public Sub HandleCampaignChange( _
+Private Sub CalculateStageRow(ByVal rowNumber As Long, ByVal lo As ListObject)
+Public Sub UpdateRowTimestampAndUser(ByVal rowNumber As Long, ByVal lo As ListObject)
+Private Function IsUserEditableColumn( _
+Private Function CurrentUserName() As String
+Public Sub UpdateCalendarTabs()
+Public Sub ApplyCampaignEntryFormats()
+Private Sub FormatSendDateColumn(ByVal lo As ListObject)
+Private Sub FormatSendTimeColumn(ByVal lo As ListObject)
+Private Sub ApplyCalculatedColumns(ByVal lo As ListObject)
+Private Function CurrentStageFormulaText(ByVal isSmsTable As Boolean) As String
+Private Function ChecklistStatusFormulaText(ByVal isSmsTable As Boolean) As String
+Private Function ChecklistFormulaItem( _
+Private Function FormulaString(ByVal TextValue As String) As String
+Private Sub FormatLastUpdatedColumn(ByVal updatedColumn As ListColumn)
+Private Sub DeleteTableColumnIfPresent( _
+Private Sub RequireTableColumn( _
+Private Sub EnsureCampaignSheets()
+Private Function GetInventoryTable() As ListObject
+Private Function GetSmsTable() As ListObject
+Private Function FindTableColumn( _
+Private Sub EnsureRenamedColumn( _
+Private Function NormalizeHeaderKey(ByVal headerName As String) As String
+Private Function ValueByHeader( _
+Private Function CampaignTableForSheet(ByVal ws As Worksheet) As ListObject
+Private Function IsChecked(ByVal inputValue As Variant) As Boolean
+Private Function HasText(ByVal inputValue As Variant) As Boolean
+Private Function TextValue(ByVal inputValue As Variant) As String
+Private Function CheckedSymbol() As String
+Private Function UncheckedSymbol() As String
+Private Function FullColumnReference( _
+Private Function PendingCountFormula( _
+Private Function CreateBackupCopy(ByVal wb As Workbook) As String
+Private Function CountBrokenReferences(ByVal wb As Workbook) As Long
+Public Function ValidateWorkbookConfiguration() As String
+Private Function DashboardChartExists(ByVal chartName As String) As Boolean
+Private Sub ValidateCampaignTypeOptions()
+Private Function CampaignTypeDropdownIsConfigured(ByVal rng As Range) As Boolean
+Private Sub ValidateCampaignTable( _
+Private Function RangeHasValidation(ByVal rng As Range) As Boolean
+Public Sub RebuildMonthlyCalendars()
+Private Function GetOrCreateCalendarSheet( _
+Private Sub BuildCalendarSheet( _
+Private Sub SetDynamicFormula( _
+Private Sub ClearCalendarSheet(ByVal ws As Worksheet)
+Private Sub StyleCalendarSheet( _
+Private Sub AddDashboardCalendarLinks(ByVal wb As Workbook)
+Private Function GetOrCreateNotesInstructionSheet(ByVal wb As Workbook) As Worksheet
+Private Sub ApplyWorkbookWrapText(ByVal wb As Workbook)
+Private Function InstructionSheetIsReady() As Boolean
+Private Sub StyleCoreWorkbookSheets(ByVal wb As Workbook)
+Private Sub StyleCampaignSheet( _
+Private Sub OrderWorkbookSheets(ByVal wb As Workbook)
+Public Sub UnfreezeWorkbookViews(ByVal wb As Workbook)
+Private Sub ConfigureWorkbookViews(ByVal wb As Workbook)
+Private Sub SetInternalLink( _
+Private Sub DeleteSheetIfPresent( _
+Private Sub BuildNotesInstructionSheet(ByRef wb As Workbook)
+Private Sub AddInstructionRow(ByRef ws As Worksheet, ByRef rowNum As Long, ByVal comp As String, ByVal act As String, ByVal desc As String, ByVal dep As String, ByVal lim As String)
+Private Sub PromptCustomCampaignType( _
